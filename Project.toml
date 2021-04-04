@@ -1,0 +1,13 @@
+name = "ParticleGridMapper"
+uuid = "c26b5f0e-3c2d-4b2c-bf9c-5432fcf95930"
+authors = ["Chia-Yu Hu <cyhu.astro@gmail.com> and contributors"]
+version = "0.1.0"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
