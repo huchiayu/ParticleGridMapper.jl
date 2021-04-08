@@ -12,8 +12,8 @@ DataP2G{N,T}() where {N,T} = DataP2G{N,T}(zero(SVector{N,T}),0,0,0,0,[])
 function assign_additional_node_data!(n::DataP2G, old::DataP2G, new::DataP2G)
 end
 
-function map_particle_to_AMRgrid!(field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T},
-	node::Node{N,T,D}, tree::Node{N,T,D}, boxsizes::SVector{N,T}; knownNgb::Bool=false) where {N,T,D}
+function map_particle_to_AMRgrid!(tree::Node{N,T,D}, field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T},
+	node::Node{N,T,D}, boxsizes::SVector{N,T}; knownNgb::Bool=false) where {N,T,D}
     if isLeaf(node)
 		#calculate field value regardless of there is a particle or not
 		if knownNgb == true
@@ -34,46 +34,46 @@ function map_particle_to_AMRgrid!(field::Vector{T}, volume::Vector{T}, X::Vector
     else
         #always open the node until we find a leaf
 	    @inbounds for i in 1:2^N
-            map_particle_to_AMRgrid!(field, volume, X, hsml, node.child[i], tree, boxsizes, knownNgb=knownNgb)
+            map_particle_to_AMRgrid!(tree, field, volume, X, hsml, node.child[i], boxsizes, knownNgb=knownNgb)
 	    end
     end
 end
 
 
-#function map_particle_to_AMRgrid_thread_2nd!(field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T}, node::Node{N,T,D}, tree::Node{N,T,D}, boxsizes::SVector{N,T}) where {N,T,D}
+#function map_particle_to_AMRgrid_thread_2nd!(tree::Node{N,T,D}, field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T}, node::Node{N,T,D}, boxsizes::SVector{N,T}) where {N,T,D}
 #	@sync for i in 1:2^N, j in 1:2^N
-#		Threads.@spawn map_particle_to_AMRgrid!(field, volume, X, hsml, node.child[i].child[j], tree, boxsizes)
+#		Threads.@spawn map_particle_to_AMRgrid!(tree, field, volume, X, hsml, node.child[i].child[j], boxsizes)
 #	end
 #end
 
 #1-layer unrolled
-function map_particle_to_AMRgrid_thread!(field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T},
-	node::Node{N,T,D}, tree::Node{N,T,D}, boxsizes::SVector{N,T}; knownNgb::Bool=false) where {N,T,D}
+function map_particle_to_AMRgrid_thread!(tree::Node{N,T,D}, field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T},
+	node::Node{N,T,D}, boxsizes::SVector{N,T}; knownNgb::Bool=false) where {N,T,D}
 	@sync for i in 1:2^N
 		#println("open this node")
-		Threads.@spawn map_particle_to_AMRgrid!(field, volume, X, hsml, node.child[i], tree, boxsizes, knownNgb=knownNgb)
+		Threads.@spawn map_particle_to_AMRgrid!(tree, field, volume, X, hsml, node.child[i], boxsizes, knownNgb=knownNgb)
 	end
 end
 
 #=
-function map_particle_to_AMRgrid_thread!(field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T},
-	node::Node{N,T,D}, tree::Node{N,T,D}, boxsizes::SVector{N,T}; knownNgb::Bool=false) where {N,T,D}
+function map_particle_to_AMRgrid_thread!(tree::Node{N,T,D}, field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T},
+	node::Node{N,T,D}, boxsizes::SVector{N,T}; knownNgb::Bool=false) where {N,T,D}
 	for i in 1:2^N
 	#@sync for i in 1:2^N
 		if isLeaf(node.child[i])
 			#@show "it's a leaf!", i
-			map_particle_to_AMRgrid!(field, volume, X, hsml, node.child[i], tree, boxsizes, knownNgb=knownNgb)
+			map_particle_to_AMRgrid!(tree, field, volume, X, hsml, node.child[i], boxsizes, knownNgb=knownNgb)
 		else
 			for j in 1:2^N
 				if isLeaf(node.child[i].child[j])
 					#@show "it's a leaf!", i,j
-					map_particle_to_AMRgrid!(field, volume, X, hsml, node.child[i].child[j], tree, boxsizes, knownNgb=knownNgb)
+					map_particle_to_AMRgrid!(tree, field, volume, X, hsml, node.child[i].child[j], boxsizes, knownNgb=knownNgb)
 				else
 					@threads for k in 1:2^N
 						#@show i,j,k
 						#println("open this node")
-						#Threads.@spawn map_particle_to_AMRgrid!(field, volume, X, hsml, node.child[i].child[j].child[k], tree, boxsizes, knownNgb=knownNgb)
-						map_particle_to_AMRgrid!(field, volume, X, hsml, node.child[i].child[j].child[k], tree, boxsizes, knownNgb=knownNgb)
+						#Threads.@spawn map_particle_to_AMRgrid!(tree, field, volume, X, hsml, node.child[i].child[j].child[k], boxsizes, knownNgb=knownNgb)
+						map_particle_to_AMRgrid!(tree, field, volume, X, hsml, node.child[i].child[j].child[k], boxsizes, knownNgb=knownNgb)
 					end
 				end
 			end
