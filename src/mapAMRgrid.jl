@@ -12,53 +12,36 @@ DataP2G{N,T}() where {N,T} = DataP2G{N,T}(zero(SVector{N,T}),0,0,0,0,[])
 function assign_additional_node_data!(n::DataP2G, old::DataP2G, new::DataP2G)
 end
 
-
 function map_particle_to_AMRgrid!(field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T},
 	node::Node{N,T,D}, tree::Node{N,T,D}, boxsizes::SVector{N,T}; knownNgb::Bool=false) where {N,T,D}
     if isLeaf(node)
-        #println("in a leaf node")
 		#calculate field value regardless of there is a particle or not
 		if knownNgb == true
-			node.n.field = 0.
+			node.n.field = zero(T)
 		else
 			node.n = D()
-			#@show node.n
         	node.n.idx_ngbs = get_scatter_ngb_tree(node.center, tree, boxsizes)
 		end
 
-        #@show idx_ngbs
 		for k in eachindex(node.n.idx_ngbs)
 			j = node.n.idx_ngbs[k]
 			dx = nearest.(X[j] - node.center, boxsizes)
 			dr = norm(dx)
 			Wij = kernel_cubic(dr/hsml[j]) / hsml[j]^N
-			#if i == 1 @show typeof.((mass[j] , rho[j] , Wij, dr, dx)) end
 			node.n.field += field[j] * (volume[j] * Wij)
-			#node.n.field += 1.0
-			#aaa = @SMatrix zeros(T,N,N)
-			#aaa += 1.0
+			#node.n.field += 1.0  #debug
 		end
-		#@show node.n
     else
-        #println("This is a node... ")
         #always open the node until we find a leaf
 	    @inbounds for i in 1:2^N
-	        #println("open this node")
             map_particle_to_AMRgrid!(field, volume, X, hsml, node.child[i], tree, boxsizes, knownNgb=knownNgb)
 	    end
     end
 end
 
 
-#function map_particle_to_AMRgrid_thread_1st!(field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T}, node::Node{N,T,D}, tree::Node{N,T,D}, boxsizes::SVector{N,T}) where {N,T,D}
-#	@sync for i in 1:2^N
-#		#println("open this node")
-#		Threads.@spawn map_particle_to_AMRgrid!(field, volume, X, hsml, node.child[i], tree, boxsizes)
-#	end
-#end
 #function map_particle_to_AMRgrid_thread_2nd!(field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T}, node::Node{N,T,D}, tree::Node{N,T,D}, boxsizes::SVector{N,T}) where {N,T,D}
 #	@sync for i in 1:2^N, j in 1:2^N
-#		#println("open this node")
 #		Threads.@spawn map_particle_to_AMRgrid!(field, volume, X, hsml, node.child[i].child[j], tree, boxsizes)
 #	end
 #end
@@ -99,6 +82,17 @@ function map_particle_to_AMRgrid_thread!(field::Vector{T}, volume::Vector{T}, X:
 end
 =#
 
+function get_AMRgrid(Tint::DataType, tree::Node{N,T,D}) where {N,T,D}
+	gridAMR = Tint[]
+	get_AMRgrid!(gridAMR, tree)
+	return gridAMR
+end
+
+#default type is Int8 (to be compatible with RADMC3D)
+function get_AMRgrid(tree::Node{N,T,D}) where {N,T,D}
+	get_AMRgrid(Int8, tree)
+end
+
 function get_AMRgrid!(gridAMR::Vector{Tint}, node::Node{N,T,D}) where {N,T,D, Tint<:Integer}
     if isLeaf(node)
         #println("in a leaf node")
@@ -114,42 +108,47 @@ function get_AMRgrid!(gridAMR::Vector{Tint}, node::Node{N,T,D}) where {N,T,D, Ti
     end
 end
 
+function get_AMRfield(tree::Node{N,T,D}) where {N,T,D}
+	fieldAMR = T[]
+	get_AMRfield!(fieldAMR, tree)
+	return fieldAMR
+end
+
 function get_AMRfield!(fieldAMR::Vector{T}, node::Node{N,T,D}) where {N,T,D, Tint<:Integer}
     if isLeaf(node)
-        #println("in a leaf node")
 		push!(fieldAMR, node.n.field)
     else
-        #println("This is a node... ")
-        #always open the node until we find a leaf
 	    @inbounds for i in 1:2^N
-	        #println("open this node")
 			get_AMRfield!(fieldAMR, node.child[i])
 	    end
     end
 end
 
+function get_AMRgrid_volumes(tree::Node{N,T,D}) where {N,T,D}
+	grid_volumes = T[]
+	get_AMRgrid_volumes!(grid_volumes,tree)
+	return grid_volumes
+end
 
 function get_AMRgrid_volumes!(volumearray, node::Node{N,T,D}) where {N,T,D}
     if isLeaf(node)
-        #println("in a leaf node")
-		#@show node.n
 		push!(volumearray, prod(node.length))
     else
-        #println("This is a node... ")
-        #always open the node until we find a leaf
 	    @inbounds for i in 1:2^N
-	        #println("open this node")
 			get_AMRgrid_volumes!(volumearray, node.child[i])
-            #loop_over_all_leaves!(node.child[i])
 	    end
     end
+end
+
+function project_AMRgrid_to_image(nx, ny, dimx, dimy, tree::Node{N,T,D}, toptreecenter::SVector{N,T}, boxsizes::SVector{N,T}) where {N,T,D}
+	image = zeros(T, nx, ny)
+	project_AMRgrid_to_image!(image, nx, ny, dimx, dimy, tree, toptreecenter, boxsizes);
+	return image
 end
 
 function project_AMRgrid_to_image!(image, nx, ny, dimx, dimy, node::Node{N,T,D}, toptreecenter::SVector{N,T}, boxsizes::SVector{N,T}) where {N,T,D}
 	@assert ispow2(nx) && ispow2(ny)
     if isLeaf(node)
-        #println("in a leaf node")
-		#@show node.n
 		#the lower left corner of the tree
 		xmin = toptreecenter[dimx] - 0.5 * boxsizes[dimx]
 		ymin = toptreecenter[dimy] - 0.5 * boxsizes[dimy]
@@ -175,30 +174,27 @@ function project_AMRgrid_to_image!(image, nx, ny, dimx, dimy, node::Node{N,T,D},
 		@assert ix2>=ix1 && iy2>=iy1
 		if ix1>ix2 ix2=ix1 end #happens when node length < pixel size
 		if iy1>iy2 iy2=iy1 end
-		#image[ix1:ix2,iy1:iy2] .+= node.n.field * fac
 		#image[ix1:ix2,iy1:iy2] .+= fac #debug
+		#image[ix1:ix2,iy1:iy2] .+= node.n.field * fac
 		#avoid using sub-array to reduce allocation
 		for j in iy1:iy2, i in ix1:ix2
 			image[i,j] += node.n.field * fac
 		end
     else
-        #println("This is a node... ")
-        #always open the node until we find a leaf
 	    @inbounds for i in 1:2^N
-	        #println("open this node")
             project_AMRgrid_to_image!(image, nx, ny, dimx, dimy, node.child[i], toptreecenter, boxsizes)
 	    end
     end
 end
 
-function project_AMRgrid_to_image_thread!(image, nx, ny, dimx, dimy, node::Node{N,T,D}, toptreecenter::SVector{N,T}, boxsizes::SVector{N,T}) where {N,T,D}
-	#image_thread = zeros(T, nx, ny, nthreads()); #each thread has its own image
+function project_AMRgrid_to_image_thread(nx, ny, dimx, dimy, node::Node{N,T,D}, toptreecenter::SVector{N,T}, boxsizes::SVector{N,T}) where {N,T,D}
+	image = zeros(T, nx, ny)
 	image_thread = [zeros(T, nx, ny) for i in 1:nthreads()]; #each thread has its own image
 	@sync for i in 1:2^N
-		#println("open this node")
 		Threads.@spawn project_AMRgrid_to_image!(image_thread[threadid()], nx, ny, dimx, dimy, node.child[i], toptreecenter, boxsizes)
 	end
 	image .= sum(image_thread)
+	return image
 end
 
 #=
