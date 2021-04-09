@@ -31,9 +31,6 @@ const BOXSIZE = 1.0
 const hsml0 = 0.2
 
 
-
-
-
 #randomly distributing particles
 #X = [@SVector rand(N) for _ in 1:Npart]
 X = get_spherical_cloud(Npart, 0.5*BOXSIZE)
@@ -69,7 +66,7 @@ rhoAMR = get_AMRfield(tree)
 @show sum(grid_volumes.*rhoAMR)
 
 println("parallel version...")
-@time map_particle_to_AMRgrid_thread!(tree, rho, volume, X, hsml, boxsizes)
+@time map_particle_to_AMRgrid_SPH_thread!(tree, rho, volume, X, hsml, boxsizes)
 rhoAMR = get_AMRfield(tree)
 @show sum(grid_volumes.*rhoAMR)
 
@@ -81,7 +78,7 @@ rhoAMR = get_AMRfield(tree)
 
 println("parallel version, precomputed ngbs...")
 #@time map_particle_to_AMRgrid_knownNgb_thread!(tree, rho, volume, X, hsml, boxsizes)
-@time map_particle_to_AMRgrid_thread!(tree, rho, volume, X, hsml, boxsizes, knownNgb=true)
+@time map_particle_to_AMRgrid_SPH_thread!(tree, rho, volume, X, hsml, boxsizes, knownNgb=true)
 rhoAMR = get_AMRfield(tree)
 @show sum(grid_volumes.*rhoAMR)
 
