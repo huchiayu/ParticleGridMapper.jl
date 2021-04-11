@@ -9,6 +9,8 @@ Npart = 1000 #number of particles
 using Random
 Random.seed!(1114)
 
+const BOXSIZE = 0.807
+
 function get_spherical_cloud(Ngas, rmax)
     X = Vector{SVector{N,T}}(undef, Ngas)
     for i in 1:Ngas
@@ -27,9 +29,6 @@ function get_spherical_cloud(Ngas, rmax)
     return X
 end
 
-const BOXSIZE = 1.0
-const hsml0 = 0.2
-
 
 #randomly distributing particles
 #X = [@SVector rand(N) for _ in 1:Npart]
@@ -38,63 +37,56 @@ topnode_length = @SVector(ones(N)) * BOXSIZE  #actual length of tree
 
 center = @SVector [0.,0.,0.]
 
-hsml = 0.5 .* ParticleGridMapper.norm.(X) .^ 0.5 #
-#hsml = ones(Npart) .* hsml0 #
-mass = ones(Npart) #particle mass
+radius = ParticleGridMapper.norm.(X./BOXSIZE)
+Mtot = 1.0
+mass = ones(Npart) .* (Mtot / Npart) #particle mass
+rho = 2*Mtot/(4*pi) .* radius.^(-2)
+
+volume = mass ./ rho #only needed for SPH
+
+hsml = 0.7*BOXSIZE .* radius.^(2/3)
 
 part = [DataP2G{N,T}(SVector(X[i]), i, hsml[i], mass[i], 0.0, T[]) for i in eachindex(X)]
 
+max_depth = 1000
+
 #build the tree
 tree = buildtree(part, center, topnode_length);
+grid_volumes = get_AMRgrid_volumes(tree)
+tree_max_depth = Int64( log2( round( BOXSIZE / minimum(grid_volumes)^(1/3))) )
+println( "true maximum depth of tree = ", log2( BOXSIZE / minimum(grid_volumes)^(1/3) ) )
+
 gridAMR = get_AMRgrid(tree)
 num_nodes  = length(gridAMR[gridAMR.==1])
 num_leaves = length(gridAMR[gridAMR.==0])
-@show num_nodes, num_leaves
-
-grid_volumes = get_AMRgrid_volumes(tree)
-@show sum(grid_volumes) ≈ prod(topnode_length)
-
+@assert num_nodes + num_leaves == length(gridAMR) #gridAMR is either 0 or 1
+@assert Npart <= num_leaves <=  (2^N)*Npart
 
 boxsizes = @SVector(ones(N)) * BOXSIZE  #for periodic B.C.
 
-rho = ones(Npart)
-volume = ones(Npart)
+for idepth in 1:tree_max_depth
+    max_depth = idepth
 
-println("serial version...")
-@time map_particle_to_AMRgrid!(tree, rho, volume, X, hsml, boxsizes)
-rhoAMR = get_AMRfield(tree)
-@show sum(grid_volumes.*rhoAMR)
+    gridAMR = get_AMRgrid(tree, max_depth=max_depth)
+    num_nodes  = length(gridAMR[gridAMR.==1])
+    num_leaves = length(gridAMR[gridAMR.==0])
+    @assert num_nodes + num_leaves == length(gridAMR) #gridAMR is either 0 or 1
 
-println("parallel version...")
-@time map_particle_to_AMRgrid_SPH_thread!(tree, rho, volume, X, hsml, boxsizes)
-rhoAMR = get_AMRfield(tree)
-@show sum(grid_volumes.*rhoAMR)
+    grid_volumes = get_AMRgrid_volumes(tree, max_depth=max_depth)
+    @assert sum(grid_volumes) ≈ prod(topnode_length) #particle of unity
 
-println("serial version, precomputed ngbs...")
-#@time map_particle_to_AMRgrid_knownNgb!(tree, rho, volume, X, hsml, boxsizes)
-@time map_particle_to_AMRgrid!(tree, rho, volume, X, hsml, boxsizes, knownNgb=true)
-rhoAMR = get_AMRfield(tree)
-@show sum(grid_volumes.*rhoAMR)
+    @time map_particle_to_AMRgrid_MFM_thread!(tree, ones(Npart), X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
+    onesAMR_MFM = get_AMRfield(tree, max_depth=max_depth)
+    @assert all(onesAMR_MFM .≈ 1.) #const. field should give all zeros for MFM as it is indep. of volume estimates
 
-println("parallel version, precomputed ngbs...")
-#@time map_particle_to_AMRgrid_knownNgb_thread!(tree, rho, volume, X, hsml, boxsizes)
-@time map_particle_to_AMRgrid_SPH_thread!(tree, rho, volume, X, hsml, boxsizes, knownNgb=true)
-rhoAMR = get_AMRfield(tree)
-@show sum(grid_volumes.*rhoAMR)
+    for p in 1:10
+        nx = ny = 2^p
+        image = zeros(T, nx, ny)
+        image = project_AMRgrid_to_image(nx, ny, 1, 2, tree, center, boxsizes, max_depth=max_depth)
+        image2 = zeros(T, nx, ny);
+        image2 = project_AMRgrid_to_image_thread(nx, ny, 1, 2, tree, center, boxsizes, max_depth=max_depth);
+        @assert all(image .≈ image2) #parallel == serial
+        @assert all(image./BOXSIZE .≈  1.) #projection working properly
+    end
 
-
-nx = ny = 256
-image = zeros(T, nx, ny)
-@time image = project_AMRgrid_to_image(nx, ny, 1, 2, tree, center, boxsizes)
-image2 = zeros(T, nx, ny);
-@time image2 = project_AMRgrid_to_image_thread(nx, ny, 1, 2, tree, center, boxsizes);
-@show all(image .≈ image2)
-
-
-clf()
-fig, ax = subplots(1, 2, figsize=(20, 10))
-ax[1].plot(getindex.(X,1), getindex.(X,2), ".", ms=3, color="red")
-ax[1].axis([-0.5*BOXSIZE, 0.5*BOXSIZE, -0.5*BOXSIZE, 0.5*BOXSIZE])
-ax[2].imshow(log10.(image'), origin="lower", interpolation="none", extent=(-0.5*BOXSIZE, 0.5*BOXSIZE, -0.5*BOXSIZE, 0.5*BOXSIZE))
-
-fig.tight_layout()
+end #idepth
