@@ -1,15 +1,16 @@
 using ParticleGridMapper
 using StaticArrays
-using PyPlot
+#using PyPlot
+using Test
 
 const N = 3 #spatial dimension
 const T = Float64
 const Npart = 1000 #number of particles
 
 using Random
-Random.seed!(1114)
+Random.seed!(1114) #happy birthday! <3
 
-const BOXSIZE = 0.807
+const BOXSIZE = 0.807 #use something != 1.0 to test round-off error
 
 function get_spherical_cloud(Ngas, rmax)
     X = Vector{SVector{N,T}}(undef, Ngas)
@@ -31,13 +32,14 @@ end
 
 
 let
+@testset "spherical cloud with AMR" begin
 
 #randomly distributing particles
 #X = [@SVector rand(N) for _ in 1:Npart]
 X = get_spherical_cloud(Npart, 0.5*BOXSIZE)
 topnode_length = @SVector(ones(N)) * BOXSIZE  #actual length of tree
 
-center = @SVector [0.,0.,0.]
+center = @SVector zeros(N)
 
 radius = ParticleGridMapper.norm.(X./BOXSIZE)
 Mtot = 1.0
@@ -60,8 +62,8 @@ tree_max_depth = Int64( log2( round( BOXSIZE / minimum(grid_volumes)^(1/3))) )
 gridAMR = get_AMRgrid(tree)
 num_nodes  = length(gridAMR[gridAMR.==1])
 num_leaves = length(gridAMR[gridAMR.==0])
-@assert num_nodes + num_leaves == length(gridAMR) #gridAMR is either 0 or 1
-@assert Npart <= num_leaves <=  (2^N)*Npart
+@test num_nodes + num_leaves == length(gridAMR) #gridAMR is either 0 or 1
+@test Npart <= num_leaves <=  (2^N)*Npart
 
 boxsizes = @SVector(ones(N)) * BOXSIZE  #for periodic B.C.
 
@@ -72,29 +74,29 @@ for idepth in 1:tree_max_depth
     gridAMR = get_AMRgrid(tree, max_depth=max_depth)
     num_nodes  = length(gridAMR[gridAMR.==1])
     num_leaves = length(gridAMR[gridAMR.==0])
-    @assert num_nodes + num_leaves == length(gridAMR) #gridAMR is either 0 or 1
+    @test num_nodes + num_leaves == length(gridAMR) #gridAMR is either 0 or 1
 
     grid_volumes = get_AMRgrid_volumes(tree, max_depth=max_depth)
-    @assert sum(grid_volumes) ≈ prod(topnode_length) #particle of unity
+    @test sum(grid_volumes) ≈ prod(topnode_length) #particle of unity
 
     map_particle_to_AMRgrid_NGP!(tree, ones(Npart), max_depth=max_depth)
     onesAMR_NGP_s = get_AMRfield(tree, max_depth=max_depth)
     map_particle_to_AMRgrid_NGP_thread!(tree, ones(Npart), max_depth=max_depth)
     onesAMR_NGP = get_AMRfield(tree, max_depth=max_depth)
-    @assert all(onesAMR_NGP .≈ onesAMR_NGP_s)
+    @test all(onesAMR_NGP .≈ onesAMR_NGP_s)
 
     map_particle_to_AMRgrid_SPH!(tree, ones(Npart), volume, X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
     onesAMR_SPH_s = get_AMRfield(tree, max_depth=max_depth)
     map_particle_to_AMRgrid_SPH_thread!(tree, ones(Npart), volume, X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
     onesAMR_SPH = get_AMRfield(tree, max_depth=max_depth)
-    @assert all(onesAMR_SPH .≈ onesAMR_SPH_s)
+    @test all(onesAMR_SPH .≈ onesAMR_SPH_s)
 
     map_particle_to_AMRgrid_MFM!(tree, ones(Npart), X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
     onesAMR_MFM_s = get_AMRfield(tree, max_depth=max_depth)
     map_particle_to_AMRgrid_MFM_thread!(tree, ones(Npart), X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
     onesAMR_MFM = get_AMRfield(tree, max_depth=max_depth)
-    @assert all(onesAMR_MFM .≈ onesAMR_MFM_s)
-    @assert all(onesAMR_MFM .≈ 1.) #const. field should give all ones for MFM as it is indep. of volume estimates (unless there are grids with no ngb particles)
+    @test all(onesAMR_MFM .≈ onesAMR_MFM_s)
+    @test all(onesAMR_MFM .≈ 1.) #const. field should give all ones for MFM as it is indep. of volume estimates (unless there are grids with no ngb particles)
 
     #this has to be right after map_particle_to_AMRgrid_MFM_thread! s.t. all(image./BOXSIZE .≈  1.)
     for p in 1:10
@@ -103,10 +105,10 @@ for idepth in 1:tree_max_depth
         image = project_AMRgrid_to_image(nx, ny, 1, 2, tree, center, boxsizes, max_depth=max_depth)
         image2 = zeros(T, nx, ny);
         image2 = project_AMRgrid_to_image_thread(nx, ny, 1, 2, tree, center, boxsizes, max_depth=max_depth);
-        @assert all(image .≈ image2) #parallel == serial
-        @assert all(image./BOXSIZE .≈  1.) #projection working properly
+        @test all(image .≈ image2) #parallel == serial
+        @test all(image./BOXSIZE .≈  1.) #projection working properly
     end
 
 end #idepth
-
-end
+end #@testset
+end #let
