@@ -54,34 +54,52 @@ tree = buildtree(part, center, topnode_length);
 
 boxsizes = @SVector(ones(N)) * BOXSIZE  #for periodic B.C.
 
-nx = ny = 256
+nx = ny = 128
+ix,iy = 1,2
 
-#println("MFM...")
+xmin = (-0.5, -0.5, -0.5).* BOXSIZE
+xmax = (0.5, 0.5, 0.5).* BOXSIZE
+
+println("Cartensian NGP...")
+image_cart_NGP = map_particle_to_3Dgrid_NGP_thread(rho, mass, X, (nx,ny,nx), xmin, xmax);
+dimlos = filter!(x->(x!=ix)&&(x!=iy), [1,2,3])[1]
+image_cart_NGP=dropdims(sum(image_cart_NGP, dims=dimlos),dims=dimlos);
+
+println("Cartensian SPH...")
+image_cart_SPH = map_particle_to_2Dgrid_loopP_thread(rho, mass./rho, X, hsml, xmin, xmax,
+    ngrids=(nx,ny,nx), xaxis=ix, yaxis=iy, column=true, pbc = (true, true, true));
+
+println("AMR MFM...")
 map_particle_to_AMRgrid_MFM_thread!(tree, rho, X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
 rhoAMR_MFM = get_AMRfield(tree, max_depth=max_depth)
-image_MFM = project_AMRgrid_to_image_thread(nx, ny, 1, 2, tree, center, boxsizes, max_depth=max_depth);
+image_MFM = project_AMRgrid_to_image_thread(nx, ny, ix, iy, tree, center, boxsizes, max_depth=max_depth);
 
-#println("SPH...")
+println("AMR SPH...")
 map_particle_to_AMRgrid_SPH_thread!(tree, rho, volume, X, hsml, boxsizes, knownNgb=true, max_depth=max_depth)
 rhoAMR_SPH = get_AMRfield(tree, max_depth=max_depth)
-image_SPH = project_AMRgrid_to_image_thread(nx, ny, 1, 2, tree, center, boxsizes, max_depth=max_depth);
+image_SPH = project_AMRgrid_to_image_thread(nx, ny, ix, iy, tree, center, boxsizes, max_depth=max_depth);
 
-#println("NGP...")
+println("AMR NGP...")
 map_particle_to_AMRgrid_NGP_thread!(tree, rho, max_depth=max_depth)
 rhoAMR_NGP = get_AMRfield(tree, max_depth=max_depth)
-image_NGP = project_AMRgrid_to_image_thread(nx, ny, 1, 2, tree, center, boxsizes, max_depth=max_depth);
+image_NGP = project_AMRgrid_to_image_thread(nx, ny, ix, iy, tree, center, boxsizes, max_depth=max_depth);
+
 
 clf()
-fig, ax = subplots(2, 2, figsize=(10, 10))
+fig, ax = subplots(2, 3, figsize=(15, 10))
 ax[1].set_title("particle distribution")
 ax[1].plot(getindex.(X,1), getindex.(X,2), ".", ms=3, color="red")
 ax[1].axis([-0.5*BOXSIZE, 0.5*BOXSIZE, -0.5*BOXSIZE, 0.5*BOXSIZE])
-ax[2].set_title("MFM")
+ax[2].set_title("AMR MFM")
 ax[2].imshow(log10.(image_MFM'), origin="lower", vmin=-1, vmax=1.5, interpolation="none", extent=(-0.5*BOXSIZE, 0.5*BOXSIZE, -0.5*BOXSIZE, 0.5*BOXSIZE))
-ax[3].set_title("SPH")
+ax[3].set_title("AMR SPH")
 ax[3].imshow(log10.(image_SPH'), origin="lower", vmin=-1, vmax=1.5, interpolation="none", extent=(-0.5*BOXSIZE, 0.5*BOXSIZE, -0.5*BOXSIZE, 0.5*BOXSIZE))
-ax[4].set_title("NGP")
+ax[4].set_title("AMR NGP")
 ax[4].imshow(log10.(image_NGP'), origin="lower", vmin=-1, vmax=1.5, interpolation="none", extent=(-0.5*BOXSIZE, 0.5*BOXSIZE, -0.5*BOXSIZE, 0.5*BOXSIZE))
+ax[5].set_title("Cartesian SPH")
+ax[5].imshow(log10.(image_cart_SPH'), origin="lower", vmin=-1, vmax=1.5, interpolation="none", extent=(-0.5*BOXSIZE, 0.5*BOXSIZE, -0.5*BOXSIZE, 0.5*BOXSIZE))
+ax[6].set_title("Cartesian NGP")
+ax[6].imshow(log10.(image_cart_NGP'), origin="lower", vmin=-1, vmax=1.5, interpolation="none", extent=(-0.5*BOXSIZE, 0.5*BOXSIZE, -0.5*BOXSIZE, 0.5*BOXSIZE))
 
 fig.tight_layout()
 savefig("compare_MFM_SPH_NGP_cloud.png")
