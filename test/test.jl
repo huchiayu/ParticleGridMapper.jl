@@ -11,8 +11,7 @@ using .Threads
 
 
 function read_snap(filename)
-
-    T=Float64
+    T = Float64
     header::Dict = h5readattr(filename, "/Header")
     boxsize::T = header["BoxSize"]
     time::T    = header["Time"]
@@ -53,7 +52,8 @@ end
 function mat2smat(mat::Array{T,3}) where {T}
     smat = [SMatrix{3,3,T}(mat[:,:,i]) for i in 1:size(mat,3)]
 end
-T = Float64
+
+const T = Float64
 const N = 3
 
 const XH = 0.71
@@ -71,7 +71,8 @@ const fac_col = (UnitMass_in_g/UnitLength_in_cm^2)*(XH/PROTONMASS)
 #function mapping()
 #for i in 13:13
 #for i in 300:300
-i=690
+#i=690
+i=112
 @show i
 snap = ""
 if i < 10
@@ -86,7 +87,7 @@ end
 #file_path = "/Users/chu/code/snapshots/SNbox_CO/nH1_box250pc_S2_N1e6_myIC_SF_G0CRwSFR_turbIC"
 
 #file_path = "/Users/chu/simulations/SNbox_CO/nH1_box100pc_S2_N1e5_myIC"
-file_path = "/Users/chu/simulations/turbbox/"
+file_path = "/Users/chu/simulations/turbbox/N32"
 #file_path = "/Users/chu/simulations/tallbox/SFSNPI_N1e6_gS10H250dS40H250_soft4_SFLJ4_eff0p5_stoIMFfix_rngSF_convSF/"
 #file_path = "./"
 filename = file_path * "/snap_" * snap * ".hdf5"
@@ -101,7 +102,7 @@ boxsize, time = read_snap(filename);
 X = vec2svec(pos);
 #Vel = vec2svec(vel);
 
-const Ngrid = 200
+const Ngrid = 256
 const Ngrid_x = Ngrid
 #const Ngrid_x = 1
 #const Ngrid_y = div(Ngrid,100)
@@ -122,7 +123,7 @@ xmax = (1., 1., 1.)
 #xmin = (0., 0., -1.)
 #xmax = (1., 1., 1.)
 
-ix,iy = 1,3
+ix,iy = 1,2
 
 cm = "viridis";
 fig, ax1 = PyPlot.subplots(1,1, figsize=(12,12))

@@ -1,33 +1,3 @@
-
-#=
-#loop over pixels, very slow and need a tree
-function map_particle_to_grid(field::Vector{T}, volume::Vector{T},
-        X::Array{SVector{N,T},1}, hsml::Vector{T}, boxsizes::SVector{N,T}, tree::Node{N,T}) where {N,T}
-    map = zeros(T, Ngrid_x, Ngrid_y, Ngrid_z);
-    Δx = BOXSIZE_X / Ngrid_x
-    Δy = BOXSIZE_Y / Ngrid_y
-    Δz = BOXSIZE_Z / Ngrid_z
-
-    @time for i in CartesianIndices(map)
-        #@show i.I
-        Xgrid = SVector(i.I .* (Δx,Δy,Δz))
-        #@show Xgrid
-        idx_ngbs = get_scatter_ngb_tree(Xgrid, tree, boxsizes)
-        for k in eachindex(idx_ngbs)
-            j = idx_ngbs[k]
-            dx = nearest.(X[j] - Xgrid, boxsizes)
-            dr = norm(dx)
-            Wij = kernel_cubic(dr/hsml[j]) / hsml[j]^N #divide by hsml[i]^N after the loop
-            #if i == 1 @show typeof.((mass[j] , rho[j] , Wij, dr, dx)) end
-            map[i] += field[j] * (volume[j] * Wij)
-            #aaa = @SMatrix zeros(T,N,N)
-            #aaa += 1.0
-        end
-    end
-    return map
-end
-=#
-
 #use NTuple because of simpler syntax with CartesianIndex
 function idx2pos(i::NTuple{N,T}, dx::NTuple{N,T2}, xmin) where {N,T<:Int,T2<:Real}
     x = SVector(@. (i-0.5) * dx + xmin)
@@ -285,3 +255,33 @@ function map_particle_to_3Dgrid_NGP_thread(field::Vector{T}, mass::Vector{T},
     map_all[counts_all.>0] ./= counts_all[counts_all.>0]
     return map_all
 end
+
+
+#=
+#loop over pixels, very slow and need a tree
+function map_particle_to_grid(field::Vector{T}, volume::Vector{T},
+        X::Array{SVector{N,T},1}, hsml::Vector{T}, boxsizes::SVector{N,T}, tree::Node{N,T}) where {N,T}
+    map = zeros(T, Ngrid_x, Ngrid_y, Ngrid_z);
+    Δx = BOXSIZE_X / Ngrid_x
+    Δy = BOXSIZE_Y / Ngrid_y
+    Δz = BOXSIZE_Z / Ngrid_z
+
+    @time for i in CartesianIndices(map)
+        #@show i.I
+        Xgrid = SVector(i.I .* (Δx,Δy,Δz))
+        #@show Xgrid
+        idx_ngbs = get_scatter_ngb_tree(Xgrid, tree, boxsizes)
+        for k in eachindex(idx_ngbs)
+            j = idx_ngbs[k]
+            dx = nearest.(X[j] - Xgrid, boxsizes)
+            dr = norm(dx)
+            Wij = kernel_cubic(dr/hsml[j]) / hsml[j]^N #divide by hsml[i]^N after the loop
+            #if i == 1 @show typeof.((mass[j] , rho[j] , Wij, dr, dx)) end
+            map[i] += field[j] * (volume[j] * Wij)
+            #aaa = @SMatrix zeros(T,N,N)
+            #aaa += 1.0
+        end
+    end
+    return map
+end
+=#
