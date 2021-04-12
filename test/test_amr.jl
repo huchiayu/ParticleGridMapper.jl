@@ -4,7 +4,7 @@ using PyPlot
 
 const N = 3 #spatial dimension
 const T = Float64
-Npart = 1000 #number of particles
+const Npart = 1000 #number of particles
 
 using Random
 Random.seed!(1114)
@@ -30,6 +30,8 @@ function get_spherical_cloud(Ngas, rmax)
 end
 
 
+let
+
 #randomly distributing particles
 #X = [@SVector rand(N) for _ in 1:Npart]
 X = get_spherical_cloud(Npart, 0.5*BOXSIZE)
@@ -44,17 +46,16 @@ rho = 2*Mtot/(4*pi) .* radius.^(-2)
 
 volume = mass ./ rho #only needed for SPH
 
+#large enough s.t. there are no grids with 0 ngb particles and we can test all(image./BOXSIZE .≈  1.) (see below)
 hsml = 0.7*BOXSIZE .* radius.^(2/3)
 
 part = [DataP2G{N,T}(SVector(X[i]), i, hsml[i], mass[i], 0.0, T[]) for i in eachindex(X)]
-
-max_depth = 1000
 
 #build the tree
 tree = buildtree(part, center, topnode_length);
 grid_volumes = get_AMRgrid_volumes(tree)
 tree_max_depth = Int64( log2( round( BOXSIZE / minimum(grid_volumes)^(1/3))) )
-println( "true maximum depth of tree = ", log2( BOXSIZE / minimum(grid_volumes)^(1/3) ) )
+#println( "true maximum depth of tree = ", log2( BOXSIZE / minimum(grid_volumes)^(1/3) ) )
 
 gridAMR = get_AMRgrid(tree)
 num_nodes  = length(gridAMR[gridAMR.==1])
@@ -64,6 +65,7 @@ num_leaves = length(gridAMR[gridAMR.==0])
 
 boxsizes = @SVector(ones(N)) * BOXSIZE  #for periodic B.C.
 
+#map a const. field to AMR gird with NGP, SPH and MFM with different max_depth
 for idepth in 1:tree_max_depth
     max_depth = idepth
 
@@ -75,10 +77,26 @@ for idepth in 1:tree_max_depth
     grid_volumes = get_AMRgrid_volumes(tree, max_depth=max_depth)
     @assert sum(grid_volumes) ≈ prod(topnode_length) #particle of unity
 
-    @time map_particle_to_AMRgrid_MFM_thread!(tree, ones(Npart), X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
-    onesAMR_MFM = get_AMRfield(tree, max_depth=max_depth)
-    @assert all(onesAMR_MFM .≈ 1.) #const. field should give all zeros for MFM as it is indep. of volume estimates
+    map_particle_to_AMRgrid_NGP!(tree, ones(Npart), max_depth=max_depth)
+    onesAMR_NGP_s = get_AMRfield(tree, max_depth=max_depth)
+    map_particle_to_AMRgrid_NGP_thread!(tree, ones(Npart), max_depth=max_depth)
+    onesAMR_NGP = get_AMRfield(tree, max_depth=max_depth)
+    @assert all(onesAMR_NGP .≈ onesAMR_NGP_s)
 
+    map_particle_to_AMRgrid_SPH!(tree, ones(Npart), volume, X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
+    onesAMR_SPH_s = get_AMRfield(tree, max_depth=max_depth)
+    map_particle_to_AMRgrid_SPH_thread!(tree, ones(Npart), volume, X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
+    onesAMR_SPH = get_AMRfield(tree, max_depth=max_depth)
+    @assert all(onesAMR_SPH .≈ onesAMR_SPH_s)
+
+    map_particle_to_AMRgrid_MFM!(tree, ones(Npart), X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
+    onesAMR_MFM_s = get_AMRfield(tree, max_depth=max_depth)
+    map_particle_to_AMRgrid_MFM_thread!(tree, ones(Npart), X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
+    onesAMR_MFM = get_AMRfield(tree, max_depth=max_depth)
+    @assert all(onesAMR_MFM .≈ onesAMR_MFM_s)
+    @assert all(onesAMR_MFM .≈ 1.) #const. field should give all ones for MFM as it is indep. of volume estimates (unless there are grids with no ngb particles)
+
+    #this has to be right after map_particle_to_AMRgrid_MFM_thread! s.t. all(image./BOXSIZE .≈  1.)
     for p in 1:10
         nx = ny = 2^p
         image = zeros(T, nx, ny)
@@ -90,3 +108,5 @@ for idepth in 1:tree_max_depth
     end
 
 end #idepth
+
+end
