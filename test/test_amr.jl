@@ -56,7 +56,7 @@ part = [DataP2G{N,T}(SVector(X[i]), i, hsml[i], mass[i], 0.0, T[]) for i in each
 #build the tree
 tree = buildtree(part, center, topnode_length);
 grid_volumes = get_AMRgrid_volumes(tree)
-tree_max_depth = Int64( log2( round( BOXSIZE / minimum(grid_volumes)^(1/3))) )
+tree_max_depth = Int( log2( round( BOXSIZE / minimum(grid_volumes)^(1/3))) )
 #println( "true maximum depth of tree = ", log2( BOXSIZE / minimum(grid_volumes)^(1/3) ) )
 
 gridAMR = get_AMRgrid(tree)
