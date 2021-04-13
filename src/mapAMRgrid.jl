@@ -12,7 +12,7 @@ DataP2G{N,T}() where {N,T} = DataP2G{N,T}(zero(SVector{N,T}),0,0,0,0,[])
 function assign_additional_node_data!(n::DataP2G, old::DataP2G, new::DataP2G)
 end
 
-const MAX_DEPTH = 1000
+const MAX_DEPTH = Int(1000)
 
 #return AMR structure (0 = leaf, 1=non-leaf node)
 function get_AMRgrid(Tint::DataType, tree::Node{N,T,D}; max_depth::Int=MAX_DEPTH) where {N,T,D}
