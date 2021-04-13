@@ -7,8 +7,8 @@ const N = 3 #spatial dimension
 const T = Float64
 const Npart = 1000 #number of particles
 
-using Random
-Random.seed!(1114) #happy birthday! <3
+#using Random
+#Random.seed!(1114) #happy birthday! <3
 
 const BOXSIZE = 0.807 #use something != 1.0 to test round-off error
 
