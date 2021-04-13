@@ -34,10 +34,10 @@ function get_AMRgrid_recursive!(gridAMR::Vector{Tint}, node::Node{N,T,D}, max_de
 		push!(gridAMR, 0)  #0 = leaf
     else
         #println("This is a node... ")
-		push!(gridAMR, 1)  #0 = leaf
         #always open the node until we find a leaf
 		depth = log2(round(root_node_length / node.length[1]))
 		if depth < max_depth
+			push!(gridAMR, 1)  #0 = leaf
 	    	@inbounds for i in 1:2^N
 	        	#println("open this node")
 				get_AMRgrid_recursive!(gridAMR, node.child[i], max_depth, root_node_length)
