@@ -15,7 +15,7 @@ end
 const MAX_DEPTH = 1000
 
 #return AMR structure (0 = leaf, 1=non-leaf node)
-function get_AMRgrid(Tint::DataType, tree::Node{N,T,D}; max_depth::Int64=MAX_DEPTH) where {N,T,D}
+function get_AMRgrid(Tint::DataType, tree::Node{N,T,D}; max_depth::Int=MAX_DEPTH) where {N,T,D}
 	gridAMR = Tint[]
 	root_node_length = tree.length[1]
 	get_AMRgrid_recursive!(gridAMR, tree, max_depth, root_node_length)
@@ -23,12 +23,12 @@ function get_AMRgrid(Tint::DataType, tree::Node{N,T,D}; max_depth::Int64=MAX_DEP
 end
 
 #default type is Int8 (to be compatible with RADMC3D)
-function get_AMRgrid(tree::Node{N,T,D}; max_depth::Int64=MAX_DEPTH) where {N,T,D}
+function get_AMRgrid(tree::Node{N,T,D}; max_depth::Int=MAX_DEPTH) where {N,T,D}
 	get_AMRgrid(Int8, tree, max_depth=max_depth)
 end
 
 #root_node_length is only used to figure out the node's depth
-function get_AMRgrid_recursive!(gridAMR::Vector{Tint}, node::Node{N,T,D}, max_depth::Int64, root_node_length::T) where {N,T,D, Tint<:Integer}
+function get_AMRgrid_recursive!(gridAMR::Vector{Tint}, node::Node{N,T,D}, max_depth::Int, root_node_length::T) where {N,T,D, Tint<:Integer}
     if isLeaf(node)
         #println("in a leaf node")
 		push!(gridAMR, 0)  #0 = leaf
@@ -50,7 +50,7 @@ function get_AMRgrid_recursive!(gridAMR::Vector{Tint}, node::Node{N,T,D}, max_de
 end
 
 #return grid/node volume following the order of the tree
-function get_AMRgrid_volumes(tree::Node{N,T,D}; max_depth::Int64=MAX_DEPTH) where {N,T,D}
+function get_AMRgrid_volumes(tree::Node{N,T,D}; max_depth::Int=MAX_DEPTH) where {N,T,D}
 	grid_volumes = T[]
 	root_node_length = tree.length[1]
 	get_AMRgrid_volumes_recursive!(grid_volumes, tree, max_depth, root_node_length)
@@ -75,39 +75,39 @@ end
 
 #main function to map the particle information to an AMR grid
 function map_particle_to_AMRgrid!(tree::Node{N,T,D}, field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T},
-	boxsizes::SVector{N,T}; knownNgb::Bool=false, max_depth::Int64=MAX_DEPTH) where {N,T,D}
+	boxsizes::SVector{N,T}; knownNgb::Bool=false, max_depth::Int=MAX_DEPTH) where {N,T,D}
 	root_node_length = tree.length[1]
 	map_particle_to_AMRgrid_recursive!(tree, field, volume, X, hsml, tree, boxsizes, knownNgb, max_depth, root_node_length)
 end
-function map_particle_to_AMRgrid_SPH!(tree, field, volume, X, hsml, boxsizes; knownNgb=false, max_depth::Int64=MAX_DEPTH)
+function map_particle_to_AMRgrid_SPH!(tree, field, volume, X, hsml, boxsizes; knownNgb=false, max_depth::Int=MAX_DEPTH)
 	map_particle_to_AMRgrid!(tree, field, volume, X, hsml, boxsizes, knownNgb=knownNgb, max_depth=max_depth)
 end
-function map_particle_to_AMRgrid_MFM!(tree, field, X, hsml, boxsizes; knownNgb=false, max_depth::Int64=MAX_DEPTH)
+function map_particle_to_AMRgrid_MFM!(tree, field, X, hsml, boxsizes; knownNgb=false, max_depth::Int=MAX_DEPTH)
 	volume = eltype(field)[]
 	map_particle_to_AMRgrid!(tree, field, volume, X, hsml, boxsizes, knownNgb=knownNgb, max_depth=max_depth)
 end
-function map_particle_to_AMRgrid_NGP!(tree::Node{N,T,D}, field; max_depth::Int64=MAX_DEPTH) where {N,T,D}
+function map_particle_to_AMRgrid_NGP!(tree::Node{N,T,D}, field; max_depth::Int=MAX_DEPTH) where {N,T,D}
 	map_particle_to_AMRgrid!(tree, field, T[], SVector{N,T}[], T[], SVector{N}(zeros(T,N)), knownNgb=false, max_depth=max_depth)
 end
 
 
 #parallel version (1-layer unrolled)
 function map_particle_to_AMRgrid_thread!(tree::Node{N,T,D}, field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T},
-	boxsizes::SVector{N,T}; knownNgb::Bool=false, max_depth::Int64=MAX_DEPTH) where {N,T,D}
+	boxsizes::SVector{N,T}; knownNgb::Bool=false, max_depth::Int=MAX_DEPTH) where {N,T,D}
 	root_node_length = tree.length[1]
 	@sync for i in 1:2^N
 		Threads.@spawn map_particle_to_AMRgrid_recursive!(tree, field, volume, X, hsml, tree.child[i], boxsizes, knownNgb, max_depth, root_node_length)
 	end
 end
 
-function map_particle_to_AMRgrid_SPH_thread!(tree, field, volume, X, hsml, boxsizes; knownNgb=false, max_depth::Int64=MAX_DEPTH)
+function map_particle_to_AMRgrid_SPH_thread!(tree, field, volume, X, hsml, boxsizes; knownNgb=false, max_depth::Int=MAX_DEPTH)
 	map_particle_to_AMRgrid_thread!(tree, field, volume, X, hsml, boxsizes, knownNgb=knownNgb, max_depth=max_depth)
 end
-function map_particle_to_AMRgrid_MFM_thread!(tree, field, X, hsml, boxsizes; knownNgb=false, max_depth::Int64=MAX_DEPTH)
+function map_particle_to_AMRgrid_MFM_thread!(tree, field, X, hsml, boxsizes; knownNgb=false, max_depth::Int=MAX_DEPTH)
 	volume = eltype(field)[]
 	map_particle_to_AMRgrid_thread!(tree, field, volume, X, hsml, boxsizes, knownNgb=knownNgb, max_depth=max_depth)
 end
-function map_particle_to_AMRgrid_NGP_thread!(tree::Node{N,T,D}, field; max_depth::Int64=MAX_DEPTH) where {N,T,D}
+function map_particle_to_AMRgrid_NGP_thread!(tree::Node{N,T,D}, field; max_depth::Int=MAX_DEPTH) where {N,T,D}
 	map_particle_to_AMRgrid_thread!(tree, field, T[], SVector{N,T}[], T[], SVector{N}(zeros(T,N)), knownNgb=false, max_depth=max_depth)
 end
 
@@ -146,7 +146,7 @@ end
 
 #recursively walk the tree
 function map_particle_to_AMRgrid_recursive!(tree::Node{N,T,D}, field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T},
-	node::Node{N,T,D}, boxsizes::SVector{N,T}, knownNgb::Bool, max_depth::Int64, root_node_length::T) where {N,T,D}
+	node::Node{N,T,D}, boxsizes::SVector{N,T}, knownNgb::Bool, max_depth::Int, root_node_length::T) where {N,T,D}
 
 	depth = log2(round(root_node_length / node.length[1]))
 	if !isLeaf(node) && (depth < max_depth)
@@ -216,14 +216,14 @@ end
 
 
 ########## return the AMR field stored in the tree as an array (following the order of the tree)
-function get_AMRfield(tree::Node{N,T,D}; max_depth::Int64=MAX_DEPTH) where {N,T,D}
+function get_AMRfield(tree::Node{N,T,D}; max_depth::Int=MAX_DEPTH) where {N,T,D}
 	fieldAMR = T[]
 	root_node_length = tree.length[1]
 	get_AMRfield_recursive!(fieldAMR, tree, max_depth, root_node_length)
 	return fieldAMR
 end
 
-function get_AMRfield_recursive!(fieldAMR::Vector{T}, node::Node{N,T,D}, max_depth::Int64, root_node_length::T) where {N,T,D, Tint<:Integer}
+function get_AMRfield_recursive!(fieldAMR::Vector{T}, node::Node{N,T,D}, max_depth::Int, root_node_length::T) where {N,T,D, Tint<:Integer}
     if isLeaf(node)
 		push!(fieldAMR, node.n.field)
     else
@@ -239,7 +239,7 @@ function get_AMRfield_recursive!(fieldAMR::Vector{T}, node::Node{N,T,D}, max_dep
 end
 
 ########## project the 3D AMR field to a 2D image
-function project_AMRgrid_to_image(nx, ny, dimx, dimy, tree::Node{N,T,D}, toptreecenter::SVector{N,T}, boxsizes::SVector{N,T}; max_depth::Int64=MAX_DEPTH) where {N,T,D}
+function project_AMRgrid_to_image(nx, ny, dimx, dimy, tree::Node{N,T,D}, toptreecenter::SVector{N,T}, boxsizes::SVector{N,T}; max_depth::Int=MAX_DEPTH) where {N,T,D}
 	image = zeros(T, nx, ny)
 	root_node_length = tree.length[1]
 	project_AMRgrid_to_image_recursive!(image, nx, ny, dimx, dimy, tree, toptreecenter, boxsizes, max_depth, root_node_length);
@@ -247,7 +247,7 @@ function project_AMRgrid_to_image(nx, ny, dimx, dimy, tree::Node{N,T,D}, toptree
 end
 
 function project_AMRgrid_to_image_thread(nx, ny, dimx, dimy, tree::Node{N,T,D}, toptreecenter::SVector{N,T},
-										boxsizes::SVector{N,T}; max_depth::Int64=MAX_DEPTH) where {N,T,D}
+										boxsizes::SVector{N,T}; max_depth::Int=MAX_DEPTH) where {N,T,D}
 	image = zeros(T, nx, ny)
 	image_thread = [zeros(T, nx, ny) for i in 1:nthreads()]; #each thread has its own image
 	root_node_length = tree.length[1]
@@ -260,7 +260,7 @@ function project_AMRgrid_to_image_thread(nx, ny, dimx, dimy, tree::Node{N,T,D}, 
 end
 
 function project_AMRgrid_to_image_recursive!(image, nx, ny, dimx, dimy, node::Node{N,T,D}, toptreecenter::SVector{N,T},
-											boxsizes::SVector{N,T}, max_depth::Int64, root_node_length::T) where {N,T,D}
+											boxsizes::SVector{N,T}, max_depth::Int, root_node_length::T) where {N,T,D}
 	@assert ispow2(nx) && ispow2(ny)
 	depth = log2(round(root_node_length / node.length[1]))
 
