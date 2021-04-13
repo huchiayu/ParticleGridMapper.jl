@@ -10,6 +10,8 @@ const Npart = 1000 #number of particles
 using Random
 Random.seed!(1114) #happy birthday! <3
 
+println("nthreads = ", Threads.nthreads())
+
 const BOXSIZE = 0.807 #use something != 1.0 to test round-off error
 
 function get_spherical_cloud(Ngas, rmax)
