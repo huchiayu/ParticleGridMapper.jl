@@ -56,12 +56,12 @@ hsml = 0.7*BOXSIZE .* radius.^(2/3)
 part = [DataP2G{N,T}(SVector(X[i]), i, hsml[i], mass[i], 0.0, T[]) for i in eachindex(X)]
 
 #build the tree
-tree = buildtree(part, center, topnode_length);
-grid_volumes = get_AMRgrid_volumes(tree)
-tree_max_depth = Int( log2( round( BOXSIZE / minimum(grid_volumes)^(1/3))) )
+treeNgb = buildtree(part, center, topnode_length);
+grid_volumes = get_AMRgrid_volumes(treeNgb)
+tree_max_depth = get_max_tree_depth(treeNgb)
 #println( "true maximum depth of tree = ", log2( BOXSIZE / minimum(grid_volumes)^(1/3) ) )
 
-gridAMR = get_AMRgrid(tree)
+gridAMR = get_AMRgrid(treeNgb)
 num_nodes  = length(gridAMR[gridAMR.==1])
 num_leaves = length(gridAMR[gridAMR.==0])
 @test num_nodes + num_leaves == length(gridAMR) #gridAMR is either 0 or 1
@@ -71,32 +71,48 @@ boxsizes = @SVector(ones(N)) * BOXSIZE  #for periodic B.C.
 
 #map a const. field to AMR gird with NGP, SPH and MFM with different max_depth
 for idepth in 1:tree_max_depth
+
     max_depth = idepth
 
-    gridAMR = get_AMRgrid(tree, max_depth=max_depth)
+    treeAMR = deepcopy(treeNgb)
+    set_max_depth_AMR!(treeAMR, max_depth)
+    balance_all_level!(treeAMR)
+
+    gridAMR = get_AMRgrid(treeAMR)
     num_nodes  = length(gridAMR[gridAMR.==1])
     num_leaves = length(gridAMR[gridAMR.==0])
     @test num_nodes + num_leaves == length(gridAMR) #gridAMR is either 0 or 1
 
-    grid_volumes = get_AMRgrid_volumes(tree, max_depth=max_depth)
+    grid_volumes = get_AMRgrid_volumes(treeAMR)
     @test sum(grid_volumes) ≈ prod(topnode_length) #particle of unity
 
-    map_particle_to_AMRgrid_NGP!(tree, ones(Npart), max_depth=max_depth)
-    onesAMR_NGP_s = get_AMRfield(tree, max_depth=max_depth)
-    map_particle_to_AMRgrid_NGP_thread!(tree, ones(Npart), max_depth=max_depth)
-    onesAMR_NGP = get_AMRfield(tree, max_depth=max_depth)
+    map_particle_to_AMRgrid_NGP!(treeAMR, ones(Npart), serial=true)
+    onesAMR_NGP_s = get_AMRfield(treeAMR)
+    map_particle_to_AMRgrid_NGP!(treeAMR, ones(Npart))
+    onesAMR_NGP = get_AMRfield(treeAMR)
     @test all(onesAMR_NGP .≈ onesAMR_NGP_s)
 
-    map_particle_to_AMRgrid_SPH!(tree, ones(Npart), volume, X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
-    onesAMR_SPH_s = get_AMRfield(tree, max_depth=max_depth)
-    map_particle_to_AMRgrid_SPH_thread!(tree, ones(Npart), volume, X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
-    onesAMR_SPH = get_AMRfield(tree, max_depth=max_depth)
+    map_particle_to_AMRgrid_SPH!(treeAMR, ones(Npart), volume, X, hsml, boxsizes, treeNgb=treeNgb, serial=true)
+    onesAMR_SPH_s = get_AMRfield(treeAMR)
+    map_particle_to_AMRgrid_SPH!(treeAMR, ones(Npart), volume, X, hsml, boxsizes, treeNgb=treeNgb)
+    onesAMR_SPH = get_AMRfield(treeAMR)
     @test all(onesAMR_SPH .≈ onesAMR_SPH_s)
 
-    map_particle_to_AMRgrid_MFM!(tree, ones(Npart), X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
-    onesAMR_MFM_s = get_AMRfield(tree, max_depth=max_depth)
-    map_particle_to_AMRgrid_MFM_thread!(tree, ones(Npart), X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
-    onesAMR_MFM = get_AMRfield(tree, max_depth=max_depth)
+    treeAMR = deepcopy(treeNgb)
+    set_max_depth_AMR!(treeAMR, max_depth)
+    balance_all_level!(treeAMR)
+    @time for i in 1:length(X)
+        map_particle_to_AMRgrid_loopP_recursive!(treeAMR, one(T), volume[i], hsml[i], X[i], boxsizes)
+    end
+    onesAMR_SPH_loopP = get_AMRfield(treeAMR)
+    @test all(onesAMR_SPH .≈ onesAMR_SPH_loopP)
+
+
+
+    map_particle_to_AMRgrid_MFM!(treeAMR, ones(Npart), X, hsml, boxsizes, treeNgb=treeNgb, serial=true)
+    onesAMR_MFM_s = get_AMRfield(treeAMR)
+    map_particle_to_AMRgrid_MFM!(treeAMR, ones(Npart), X, hsml, boxsizes, treeNgb=treeNgb)
+    onesAMR_MFM = get_AMRfield(treeAMR)
     @test all(onesAMR_MFM .≈ onesAMR_MFM_s)
     @test all(onesAMR_MFM .≈ 1.) #const. field should give all ones for MFM as it is indep. of volume estimates (unless there are grids with no ngb particles)
 
@@ -104,9 +120,9 @@ for idepth in 1:tree_max_depth
     for p in 1:10
         nx = ny = 2^p
         image = zeros(T, nx, ny)
-        image = project_AMRgrid_to_image(nx, ny, 1, 2, tree, center, boxsizes, max_depth=max_depth)
+        image = project_AMRgrid_to_image(nx, ny, 1, 2, treeAMR, center, boxsizes, serial=true)
         image2 = zeros(T, nx, ny);
-        image2 = project_AMRgrid_to_image_thread(nx, ny, 1, 2, tree, center, boxsizes, max_depth=max_depth);
+        image2 = project_AMRgrid_to_image(nx, ny, 1, 2, treeAMR, center, boxsizes)
         @test all(image .≈ image2) #parallel == serial
         @test all(image./BOXSIZE .≈  1.) #projection working properly
     end

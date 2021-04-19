@@ -14,11 +14,11 @@ buildtree, DataP2G, get_AMRgrid_volumes, get_AMRgrid, get_AMRfield,
 map_particle_to_AMRgrid_SPH!,
 map_particle_to_AMRgrid_MFM!,
 map_particle_to_AMRgrid_NGP!,
-map_particle_to_AMRgrid_SPH_thread!,
-map_particle_to_AMRgrid_MFM_thread!,
-map_particle_to_AMRgrid_NGP_thread!,
+map_particle_to_AMRgrid_loopP_recursive!,
 project_AMRgrid_to_image,
-project_AMRgrid_to_image_thread
+get_max_tree_depth,
+set_max_depth_AMR!,
+balance_all_level!
 
 import OctreeBH: AbstractData, assign_additional_node_data!
 

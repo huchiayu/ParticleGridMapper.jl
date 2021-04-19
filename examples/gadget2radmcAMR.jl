@@ -110,14 +110,22 @@ part = [DataP2G{N,T}(SVector(X[i]), i, hsml[i], mass[i], 0.0, Int64[]) for i in 
 
 #build the tree
 println("building the tree...")
-@time tree = buildtree(part, center, topnode_length);
-grid_volumes = get_AMRgrid_volumes(tree)
+@time treeNgb = buildtree(part, center, topnode_length);
+grid_volumes = get_AMRgrid_volumes(treeNgb)
 @assert sum(grid_volumes) ≈ prod(topnode_length) #partition unity check
 println( "true maximum depth of tree = ", log2( BOXSIZE / minimum(grid_volumes)^(1/3) ) )
 
 
+max_depth_true = get_max_tree_depth(treeNgb)
+@show max_depth, max_depth_true
+
+treeAMR = deepcopy(treeNgb)
+set_max_depth_AMR!(treeAMR, max_depth)
+balance_all_level!(treeAMR)
+
+
 println("getting AMR grid structure...")
-@time gridAMR = get_AMRgrid(tree, max_depth=max_depth)
+@time gridAMR = get_AMRgrid(treeAMR)
 num_nodes  = length(gridAMR[gridAMR.==1])
 num_leaves = length(gridAMR[gridAMR.==0])
 @show num_nodes, num_leaves
@@ -157,14 +165,14 @@ end
 
 
 println("mapping vx...")
-@time map_particle_to_AMRgrid_MFM_thread!(tree, vx, X, hsml, boxsizes, knownNgb=false, max_depth=max_depth)
-vxAMR_MFM = get_AMRfield(tree, max_depth=max_depth)
+@time map_particle_to_AMRgrid_MFM!(treeAMR, vx, X, hsml, boxsizes, treeNgb=treeNgb)
+vxAMR_MFM = get_AMRfield(treeAMR)
 println("mapping vy...")
-@time map_particle_to_AMRgrid_MFM_thread!(tree, vy, X, hsml, boxsizes, knownNgb=true, max_depth=max_depth)
-vyAMR_MFM = get_AMRfield(tree, max_depth=max_depth)
+@time map_particle_to_AMRgrid_MFM!(treeAMR, vy, X, hsml, boxsizes)
+vyAMR_MFM = get_AMRfield(treeAMR)
 println("mapping vz...")
-@time map_particle_to_AMRgrid_MFM_thread!(tree, vz, X, hsml, boxsizes, knownNgb=true, max_depth=max_depth)
-vzAMR_MFM = get_AMRfield(tree, max_depth=max_depth)
+@time map_particle_to_AMRgrid_MFM!(treeAMR, vz, X, hsml, boxsizes)
+vzAMR_MFM = get_AMRfield(treeAMR)
 
 open("gas_velocity.binp", "w") do f
     write(f, 1) # iformat
@@ -186,24 +194,24 @@ xH2, xHI, xHp, xCO, xCI, xCp, xelec = read_chemistry(fname);
 nHtot = rho.*(UnitDensity_in_pccm*XH)
 
 println("mapping nH2...")
-@time map_particle_to_AMRgrid_MFM_thread!(tree, xH2.*nHtot, X, hsml, boxsizes, knownNgb=true, max_depth=max_depth)
-nH2_AMR_MFM = get_AMRfield(tree, max_depth=max_depth)
+@time map_particle_to_AMRgrid_MFM!(treeAMR, xH2.*nHtot, X, hsml, boxsizes)
+nH2_AMR_MFM = get_AMRfield(treeAMR)
 
-NH2 = project_AMRgrid_to_image_thread(nx, ny, ix, iy, tree, center, boxsizes, max_depth=max_depth);
+NH2 = project_AMRgrid_to_image_thread(nx, ny, ix, iy, treeAMR, center, boxsizes);
 
 println("mapping nCO...")
-@time map_particle_to_AMRgrid_MFM_thread!(tree, xCO.*nHtot, X, hsml, boxsizes, knownNgb=true, max_depth=max_depth)
-nCO_AMR_MFM = get_AMRfield(tree, max_depth=max_depth)
+@time map_particle_to_AMRgrid_MFM!(treeAMR, xCO.*nHtot, X, hsml, boxsizes)
+nCO_AMR_MFM = get_AMRfield(treeAMR)
 
-NCO = project_AMRgrid_to_image_thread(nx, ny, ix, iy, tree, center, boxsizes, max_depth=max_depth);
+NCO = project_AMRgrid_to_image_thread(nx, ny, ix, iy, treeAMR, center, boxsizes);
 
 XHe = 0.1
 mu = @. 1 / (XH * (xHI + xH2 + xHp + XHe + xelec));
 temp = u.*mu .* (1e10*PROTONMASS/(1.5*BOLTZMANN));
 
 println("mapping temp...")
-@time map_particle_to_AMRgrid_MFM_thread!(tree, temp, X, hsml, boxsizes, knownNgb=true, max_depth=max_depth)
-tempAMR_MFM = get_AMRfield(tree, max_depth=max_depth)
+@time map_particle_to_AMRgrid_MFM!(treeAMR, temp, X, hsml, boxsizes)
+tempAMR_MFM = get_AMRfield(treeAMR)
 
 #ortho-to-para ratio = 3
 fac_para = 0.25
