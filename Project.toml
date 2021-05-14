@@ -8,6 +8,7 @@ OctreeBH = "32610584-8033-4d12-ab8e-952911879412"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
+OctreeBH = "0.2"
 StaticArrays = "1.2"
 julia = "1.3"
 
