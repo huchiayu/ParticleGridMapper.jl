@@ -10,6 +10,11 @@
 
 ![vis_amr](https://user-images.githubusercontent.com/23061774/137218103-79a368f5-1de1-42a0-836a-3530e2a03ffa.png)
 
+
+## 2:1 balance
+![2to1balance_medium](https://user-images.githubusercontent.com/23061774/137220920-c9c07570-d658-4fb8-b34c-2c305196c67b.gif)
+
+
 # Author
 Chia-Yu Hu @ Max Planck Institute for Extraterrestrial Physics 
 (cyhu.astro@gmail.com)
