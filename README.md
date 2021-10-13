@@ -6,6 +6,10 @@
 [![Coverage](https://codecov.io/gh/huchiayu/ParticleGridMapper.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/huchiayu/ParticleGridMapper.jl)
 
 
-
+```ParticleGridMapper.jl``` interpolates particle data onto an adaptive mesh where each cell contains no more than one particle.
 
 ![vis_amr](https://user-images.githubusercontent.com/23061774/137218103-79a368f5-1de1-42a0-836a-3530e2a03ffa.png)
+
+# Author
+Chia-Yu Hu @ Max Planck Institute for Extraterrestrial Physics 
+(cyhu.astro@gmail.com)
