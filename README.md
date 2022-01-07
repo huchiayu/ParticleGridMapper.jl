@@ -11,6 +11,10 @@
 ![vis_amr](https://user-images.githubusercontent.com/23061774/137218103-79a368f5-1de1-42a0-836a-3530e2a03ffa.png)
 
 
+# Examples
+
+ - [examples/example_cloud.jl](https://github.com/huchiayu/ParticleGridMapper.jl/blob/master/examples/example_cloud.jl) demonstrates the usage of five different interpolation schemes: (1) Cartesian mesh with nearest gid point (NGP); (2) Cartesian mesh with smoothed-particle hydrodynamics (SPH); (3) NGP on an adaptive mesh; (4) SPH on an adaptive mesh; (5) Meshless finite mass (MFM) on an adaptive mesh.
+
 ## 2:1 balance
 ![2to1balance_medium](https://user-images.githubusercontent.com/23061774/137220920-c9c07570-d658-4fb8-b34c-2c305196c67b.gif)
 
