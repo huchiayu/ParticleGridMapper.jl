@@ -6,17 +6,22 @@
 [![Coverage](https://codecov.io/gh/huchiayu/ParticleGridMapper.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/huchiayu/ParticleGridMapper.jl)
 
 
-```ParticleGridMapper.jl``` interpolates particle data onto an adaptive mesh where each cell contains no more than one particle.
+```ParticleGridMapper.jl``` interpolates particle data onto either a Cartesian (uniform) grid or an adaptive mesh refinement (AMR) grid where each cell contains no more than one particle. The AMR grid can be trimmed with a user-defined maximum level of refinement. Three differnt interpolation schemes are supported: nearest grid point (NGP), smoothed-particle hydrodynamics (SPH), and Meshless finite mass (MFM). It is multi-threading parallel.
 
 ![vis_amr](https://user-images.githubusercontent.com/23061774/137218103-79a368f5-1de1-42a0-836a-3530e2a03ffa.png)
+
+## 2:1 balance
+
+The AMR grid can be further refined to achieve the so-called "2:1 balance" where the refinement levels of neighboring cells differ by no greater than a factor of two, which leads to a smoothed transition of refinement.
+
+![2to1balance_medium](https://user-images.githubusercontent.com/23061774/137220920-c9c07570-d658-4fb8-b34c-2c305196c67b.gif)
 
 
 # Examples
 
- - [examples/example_cloud.jl](https://github.com/huchiayu/ParticleGridMapper.jl/blob/master/examples/example_cloud.jl) demonstrates the usage of five different interpolation schemes: (1) Cartesian mesh with nearest gid point (NGP); (2) Cartesian mesh with smoothed-particle hydrodynamics (SPH); (3) NGP on an adaptive mesh; (4) SPH on an adaptive mesh; (5) Meshless finite mass (MFM) on an adaptive mesh.
+ - [examples/example_cloud.jl](https://github.com/huchiayu/ParticleGridMapper.jl/blob/master/examples/example_cloud.jl) demonstrates the usage of five different interpolation schemes: (1) Cartesian mesh with NGP; (2) Cartesian mesh with SPH; (3) NGP on an adaptive mesh; (4) SPH on an adaptive mesh; (5) MFM on an adaptive mesh. It then generates the following plot:
 
-## 2:1 balance
-![2to1balance_medium](https://user-images.githubusercontent.com/23061774/137220920-c9c07570-d658-4fb8-b34c-2c305196c67b.gif)
+![compare_MFM_SPH_NGP_cloud](https://user-images.githubusercontent.com/23061774/148554036-fe67d4b4-5f02-41bf-a079-7f93c46ec2d7.png)
 
 
 # Author
