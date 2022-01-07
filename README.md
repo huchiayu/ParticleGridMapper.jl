@@ -23,6 +23,7 @@ The AMR grid can be further refined to achieve the so-called "2:1 balance" where
 
 ![compare_MFM_SPH_NGP_cloud](https://user-images.githubusercontent.com/23061774/148554036-fe67d4b4-5f02-41bf-a079-7f93c46ec2d7.png)
 
+ - [examples/gadget2radmcAMR.jl](https://github.com/huchiayu/ParticleGridMapper.jl/blob/master/examples/gadget2radmcAMR.jl) demonstrates how to generate an adaptive mesh from a [Gadget](https://wwwmpa.mpa-garching.mpg.de/gadget4/) snapshot (format 3) and some axillary files required for radiative transfer calculations for CO(1-0) emission using the [RADMC-3D](https://www.ita.uni-heidelberg.de/~dullemond/software/radmc-3d/) code.
 
 # Author
 Chia-Yu Hu @ Max Planck Institute for Extraterrestrial Physics 
