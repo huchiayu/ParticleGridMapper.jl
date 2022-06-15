@@ -247,7 +247,7 @@ function set_AMRfield_recursive!(cc::Vector{Int}, field::Vector{T}, node::Node{N
 		end
 		node.n.field = field[cc[1]]
 		cc[1] += 1
-		println("cc=", cc)
+		#println("cc=", cc)
     else
 		depth = log2(round(root_node_length / node.length[1]))
 		if depth < max_depth
@@ -257,7 +257,7 @@ function set_AMRfield_recursive!(cc::Vector{Int}, field::Vector{T}, node::Node{N
 		else
 			node.n.field = field[cc[1]]
 			cc[1] += 1
-			println("cc=", cc)
+			#println("cc=", cc)
 		end
     end
 end
