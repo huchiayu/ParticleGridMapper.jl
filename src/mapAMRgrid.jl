@@ -234,6 +234,33 @@ function kernel_average_MFM(field::Vector{T}, X0::SVector{N,T}, idx_ngbs::Vector
 	return length(idx_ngbs) > 0 ? (res / sigma) : zero(T)
 end
 
+function set_AMRfield(field::Vector{T}, tree::Node{N,T,D}; max_depth::Int=MAX_DEPTH) where {N,T,D}
+	root_node_length = tree.length[1]
+	cc = [1] #awkward code! because cc=1 doesn't work (passed by value!?)
+	set_AMRfield_recursive!(cc, field, tree, max_depth, root_node_length)
+end
+
+function set_AMRfield_recursive!(cc::Vector{Int}, field::Vector{T}, node::Node{N,T,D}, max_depth::Int, root_node_length::T) where {N,T,D, Tint<:Integer}
+    if isLeaf(node)
+		if node.n == nothing
+			node.n = D()
+		end
+		node.n.field = field[cc[1]]
+		cc[1] += 1
+		println("cc=", cc)
+    else
+		depth = log2(round(root_node_length / node.length[1]))
+		if depth < max_depth
+	    	@inbounds for i in 1:2^N
+				set_AMRfield_recursive!(cc, field, node.child[i], max_depth, root_node_length)
+	    	end
+		else
+			node.n.field = field[cc[1]]
+			cc[1] += 1
+			println("cc=", cc)
+		end
+    end
+end
 
 ########## return the AMR field stored in the tree as an array (following the order of the tree)
 function get_AMRfield(tree::Node{N,T,D}; max_depth::Int=MAX_DEPTH) where {N,T,D}
