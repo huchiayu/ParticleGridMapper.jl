@@ -119,6 +119,7 @@ function map_particle_to_3Dgrid_loopP_thread(
     pbc::NTuple{N,Bool}=(true,true,true)) where {N,T}
 
     map = zeros(T, ngrids[1], ngrids[2], ngrids[3], nthreads()); #each thread has its own slice
+    #map_sigma = zeros(T, ngrids[1], ngrids[2], ngrids[3], nthreads()); #for MFM
     Δx = @. (xmax - xmin) / ngrids
 
     if findfirst(ngrids.==1) != nothing
@@ -126,12 +127,12 @@ function map_particle_to_3Dgrid_loopP_thread(
         error("this is a slice! use map_particle_to_2Dgrid_loopP_thread() instead...")
     end
 
-    @time @inbounds @threads for p in eachindex(X)
+    @inbounds @threads for p in eachindex(X)
         Istart = CartesianIndex(pos2idx_left( X[p] .- hsml[p], Δx, xmin))
         Iend   = CartesianIndex(pos2idx_right(X[p] .+ hsml[p], Δx, xmin))
 
         hsml_inv = 1.0 / hsml[p]
-        f_v = field[p] * volume[p] * hsml_inv^3
+        f_v = field[p] * volume[p] * hsml_inv^3 #SPH
 
         for Idx in Istart:Iend
             #only for the periodic dimensions
@@ -144,10 +145,15 @@ function map_particle_to_3Dgrid_loopP_thread(
             r = norm(idx2pos(Idx.I,Δx, xmin) - X[p]) * hsml_inv
 
             idx = CartesianIndex(iw)
-            map[idx,threadid()] += kernel_cubic(r) * f_v
+            map[idx,threadid()] += kernel_cubic(r) * f_v #SPH
+            #map[idx,threadid()] += kernel_cubic(r) * field[p] * hsml_inv^3 #MFM
+            #map_sigma[idx,threadid()] += kernel_cubic(r) * hsml_inv^3 #MFM
         end
     end
-    return dropdims(sum(map, dims=4),dims=4) #sum over threads
+    m = dropdims(sum(map, dims=4),dims=4) #sum over threads
+    #m_sigma = dropdims(sum(map_sigma, dims=4),dims=4) #MFM
+    #m[m_sigma .> 0] ./= m_sigma[m_sigma .> 0] #MFM
+    return m
 end
 
 function trick(xmin::NTuple{N,T}, xmax::NTuple{N,T}, Δx::NTuple{N,T}, ngrids::NTuple{N,Int}) where {N,T}

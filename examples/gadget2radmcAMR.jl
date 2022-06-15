@@ -9,7 +9,7 @@ const T = Float64
 const BOXSIZE = 1.0  #kpc
 const max_depth = 10 #maximum refinement level (RADMC requires < 20)
 
-const nx = ny = 512  #for the column density maps of H2 and CO (npix in RADMC)
+const nx = ny = 128  #for the column density maps of H2 and CO (npix in RADMC)
 const ix, iy = 1, 2  #axes of the column density maps
 
 function read_snap(filename)
@@ -72,7 +72,7 @@ const Year_in_s = 31556926.
 const fac_col = (UnitMass_in_g/UnitLength_in_cm^2)*(XH/PROTONMASS)
 
 
-let
+#let
 
 i=500
 @show i
@@ -86,6 +86,7 @@ else
 end
 
 file_path = "/Users/chu/simulations/tallbox/SFSNPI_N1e5_gS10H250dS40H250_soft0p92_from200Myr_SFcut_Z1"
+#file_path = "/Users/chu/simulations/tallbox/SFSNPI_N1e6_gS10H250dS40H250_soft0p43_from200Myr_SFcut_Z1/"
 #file_path = "/Users/chu/simulations/tallbox/SFSNPI_N1e7_gS10H250dS40H250_soft0p2_from100Myr_Z1"
 #file_path = "/Users/chu/simulations/turbbox/N32"
 #file_path = "./"
@@ -99,7 +100,6 @@ X = vec2svec(pos);
 vx = vel[1,:]
 vy = vel[2,:]
 vz = vel[3,:]
-
 
 topnode_length = @SVector(ones(N)) * BOXSIZE  #actual length of tree
 
@@ -134,7 +134,7 @@ num_leaves = length(gridAMR[gridAMR.==0])
 boxsizes = @SVector(ones(N)) * BOXSIZE  #for periodic B.C.
 
 PARSEC   = 3.08572e18 #[cm] important to use the exact same value as in radmc to avoid unnecessary sub-pixeling
-KILOPARSEC = 1e3 * 3.08572e18
+KILOPARSEC = 1e3 * PARSEC
 
 
 #xmin, ymin, zmin = (center .- 0.5.*boxsizes) .* KILOPARSEC
@@ -192,18 +192,21 @@ xH2, xHI, xHp, xCO, xCI, xCp, xelec = read_chemistry(fname);
 
 
 nHtot = rho.*(UnitDensity_in_pccm*XH)
+println("mapping nHtot...")
+@time map_particle_to_AMRgrid_MFM!(treeAMR, nHtot, X, hsml, boxsizes)
+nHtot_AMR_MFM = get_AMRfield(treeAMR)
 
 println("mapping nH2...")
 @time map_particle_to_AMRgrid_MFM!(treeAMR, xH2.*nHtot, X, hsml, boxsizes)
 nH2_AMR_MFM = get_AMRfield(treeAMR)
 
-NH2 = project_AMRgrid_to_image_thread(nx, ny, ix, iy, treeAMR, center, boxsizes);
+NH2 = project_AMRgrid_to_image(nx, ny, ix, iy, treeAMR, center, boxsizes);
 
 println("mapping nCO...")
 @time map_particle_to_AMRgrid_MFM!(treeAMR, xCO.*nHtot, X, hsml, boxsizes)
 nCO_AMR_MFM = get_AMRfield(treeAMR)
 
-NCO = project_AMRgrid_to_image_thread(nx, ny, ix, iy, treeAMR, center, boxsizes);
+NCO = project_AMRgrid_to_image(nx, ny, ix, iy, treeAMR, center, boxsizes);
 
 XHe = 0.1
 mu = @. 1 / (XH * (xHI + xH2 + xHp + XHe + xelec));
@@ -263,14 +266,23 @@ open("escprob_lengthscale.binp", "w") do f
     end
 end
 
-vturb0 = 3.0 #km/s
-vturb = ones(num_leaves).*vturb0
+#vturb0 = 3.0 #km/s
+#vturb = ones(num_leaves).*vturb0
+
+v2 = @.(vx^2 + vy^2 + vz^2)
+println("mapping v2...")
+@time map_particle_to_AMRgrid_MFM!(treeAMR, v2, X, hsml, boxsizes)
+v2AMR_MFM = get_AMRfield(treeAMR)
+vturbAMR_MFM = @. (v2AMR_MFM - vxAMR_MFM^2 - vyAMR_MFM^2 - vzAMR_MFM^2)
+vturbAMR_MFM[vturbAMR_MFM.<0] .= 0 #happens when it's very close to zero due to round-off error (usually at low-density regions in a coarse grid)
+vturbAMR_MFM = sqrt.(vturbAMR_MFM)
+
 open("microturbulence.binp", "w") do f
     write(f, 1) # iformat
     write(f, 8) # double precision (only for binary input)
     write(f, num_leaves)
-    for i in eachindex(vturb)
-        write(f, vturb[i]*1e5) #in cm/sec (instead of km/sec)!!!
+    for i in eachindex(vturbAMR_MFM)
+        write(f, vturbAMR_MFM[i]*1e5) #in cm/sec (instead of km/sec)!!!
     end
 end
 
@@ -307,4 +319,4 @@ h5write(fname, "AMRmaps/NCO", NCO)
 close(fid)
 
 
-end #let
+#end #let
