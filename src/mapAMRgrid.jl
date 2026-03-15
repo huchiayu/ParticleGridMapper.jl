@@ -240,7 +240,7 @@ function set_AMRfield(field::Vector{T}, tree::Node{N,T,D}; max_depth::Int=MAX_DE
 	set_AMRfield_recursive!(cc, field, tree, max_depth, root_node_length)
 end
 
-function set_AMRfield_recursive!(cc::Vector{Int}, field::Vector{T}, node::Node{N,T,D}, max_depth::Int, root_node_length::T) where {N,T,D, Tint<:Integer}
+function set_AMRfield_recursive!(cc::Vector{Int}, field::Vector{T}, node::Node{N,T,D}, max_depth::Int, root_node_length::T) where {N,T,D}
     if isLeaf(node)
 		if node.n == nothing
 			node.n = D()
@@ -270,7 +270,7 @@ function get_AMRfield(tree::Node{N,T,D}; max_depth::Int=MAX_DEPTH) where {N,T,D}
 	return fieldAMR
 end
 
-function get_AMRfield_recursive!(fieldAMR::Vector{T}, node::Node{N,T,D}, max_depth::Int, root_node_length::T) where {N,T,D, Tint<:Integer}
+function get_AMRfield_recursive!(fieldAMR::Vector{T}, node::Node{N,T,D}, max_depth::Int, root_node_length::T) where {N,T,D}
     if isLeaf(node)
 		if node.n == nothing
 			node.n = D()
@@ -302,7 +302,7 @@ function project_AMRgrid_to_image(nx, ny, dimx, dimy, tree::Node{N,T,D}, rootcen
 		return image
 	end
 
-	image_thread = [zeros(T, nx, ny) for i in 1:nthreads()]; #each thread has its own image
+	image_thread = [zeros(T, nx, ny) for i in 1:Threads.maxthreadid()]; #each thread has its own image
 	if isLeaf(tree)
 		project_AMRgrid_to_image_recursive!(image_thread[threadid()], nx, ny, dimx, dimy, tree, rootcenter, boxsizes)
 	else

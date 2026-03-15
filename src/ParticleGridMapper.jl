@@ -2,7 +2,7 @@ module ParticleGridMapper
 using StaticArrays
 using OctreeBH
 #using LinearAlgebra  #norm()
-using .Threads
+using Base.Threads
 
 export map_particle_to_2Dgrid_loopP,
 map_particle_to_2Dgrid_loopP_thread,

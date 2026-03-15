@@ -75,7 +75,7 @@ function map_particle_to_2Dgrid_loopP_thread(
     Xmin::NTuple{N,T}, Xmax::NTuple{N,T}; xaxis::Int=1,yaxis::Int=2, column::Bool=true,
     ngrids::NTuple{N,Int}=(100,100,100), pbc::NTuple{N,Bool}=(true,true,true)) where {N,T}
 
-    map = zeros(T, ngrids[xaxis], ngrids[yaxis], nthreads()); #each thread has its own slice
+    map = zeros(T, ngrids[xaxis], ngrids[yaxis], Threads.maxthreadid()); #each thread has its own slice
     ΔX = @. (Xmax - Xmin) / ngrids
 
     #in the special case of a slice (Nx/y/z = 1), the following hack can speed up a lot without touching the code
@@ -118,8 +118,8 @@ function map_particle_to_3Dgrid_loopP_thread(
     ngrids::NTuple{N,Int}=(100,100,100),
     pbc::NTuple{N,Bool}=(true,true,true)) where {N,T}
 
-    map = zeros(T, ngrids[1], ngrids[2], ngrids[3], nthreads()); #each thread has its own slice
-    #map_sigma = zeros(T, ngrids[1], ngrids[2], ngrids[3], nthreads()); #for MFM
+    map = zeros(T, ngrids[1], ngrids[2], ngrids[3], Threads.maxthreadid()); #each thread has its own slice
+    #map_sigma = zeros(T, ngrids[1], ngrids[2], ngrids[3], Threads.maxthreadid()); #for MFM
     Δx = @. (xmax - xmin) / ngrids
 
     if findfirst(ngrids.==1) != nothing
@@ -240,8 +240,8 @@ end
 function map_particle_to_3Dgrid_NGP_thread(field::Vector{T}, mass::Vector{T},
         X::Array{SVector{N,T},1}, ngrids::NTuple{N,Int}, xmin::NTuple{N,T}, xmax::NTuple{N,T}) where {N,T}
 
-    map = zeros(T, ngrids[1], ngrids[2], ngrids[3], nthreads()); #each thread has its own slice
-    counts = zeros(T, ngrids[1], ngrids[2], ngrids[3], nthreads()); #each thread has its own slice
+    map = zeros(T, ngrids[1], ngrids[2], ngrids[3], Threads.maxthreadid()); #each thread has its own slice
+    counts = zeros(T, ngrids[1], ngrids[2], ngrids[3], Threads.maxthreadid()); #each thread has its own slice
     Δx = @. (xmax - xmin) / ngrids
 
     @time @inbounds @threads for i in eachindex(X)
