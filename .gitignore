@@ -37,3 +37,7 @@ Manifest.toml
 *.mov
 
 .DS_Store
+
+# Python packaging artifacts
+*.egg-info/
+__pycache__/
