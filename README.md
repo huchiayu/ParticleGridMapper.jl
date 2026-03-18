@@ -27,6 +27,53 @@ The AMR grid can be further refined to achieve the so-called "2:1 balance" where
 
 ![CO_10_21_maps](https://user-images.githubusercontent.com/23061774/148557075-d33fcdc0-862a-4e6c-bcaf-7e545c4f1ce1.png)
 
+# Python Wrapper
+
+A Python wrapper is available in the `python/` directory, allowing you to call ParticleGridMapper.jl from Python via [JuliaCall](https://juliapy.github.io/PythonCall.jl/stable/).
+
+### Installation
+
+```bash
+pip install -e "./python"
+```
+
+### Quick Start
+
+```python
+import numpy as np
+import particlegridmapper as pgm
+
+pgm.init(num_threads=4)  # optional, call before first use
+
+# particle data
+positions = np.random.uniform(-0.5, 0.5, (1000, 3))
+mass = np.ones(1000) / 1000
+hsml = np.full(1000, 0.1)
+volume = np.full(1000, 1.0 / 1000)
+field = np.ones(1000)
+
+xmin = (-0.5, -0.5, -0.5)
+xmax = (0.5, 0.5, 0.5)
+
+# Cartesian NGP
+grid = pgm.map_to_3d_ngp(positions, field, mass, (32, 32, 32), xmin, xmax)
+
+# Cartesian SPH (2D projection)
+image = pgm.map_to_2d(positions, field, volume, hsml, xmin, xmax,
+                       ngrids=(32, 32, 32))
+
+# AMR workflow
+amr = pgm.AMRTree(positions, hsml, mass,
+                   center=(0., 0., 0.), box_length=(1., 1., 1.))
+amr.set_max_depth(4)
+amr.balance()
+amr.map_ngp(field)
+proj = amr.project_to_image(nx=64, ny=64, dimx=1, dimy=2,
+                             center=(0., 0., 0.), boxsizes=(1., 1., 1.))
+```
+
+See [examples/example_cloud.py](https://github.com/huchiayu/ParticleGridMapper.jl/blob/master/examples/example_cloud.py) for a complete example that reproduces the Julia comparison plot.
+
 # Author
 Chia-Yu Hu @ Max Planck Institute for Extraterrestrial Physics 
 (cyhu.astro@gmail.com)
