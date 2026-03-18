@@ -75,44 +75,26 @@ end
 
 #main function to map the particle information to an AMR grid
 
+const DEFAULT_SPAWN_DEPTH = 4
+
+function _spawn_AMR_parallel!(node::Node{N,T,D}, depth::Int, spawn_depth::Int,
+		field, volume, X, hsml, boxsizes, treeNgb) where {N,T,D}
+	if isLeaf(node) || depth >= spawn_depth
+		map_particle_to_AMRgrid_recursive!(node, field, volume, X, hsml, boxsizes, treeNgb)
+	else
+		@sync for i in 1:2^N
+			Threads.@spawn _spawn_AMR_parallel!(node.child[i], depth+1, spawn_depth,
+				field, volume, X, hsml, boxsizes, treeNgb)
+		end
+	end
+end
 
 function map_particle_to_AMRgrid!(treeAMR::Node{N,T,D}, field::Vector{T}, volume::Vector{T}, X::Vector{SVector{N,T}}, hsml::Vector{T},
 	boxsizes::SVector{N,T}, treeNgb::Union{Node{N,T,D}, Nothing}, serial::Bool) where {N,T,D}
 	if serial
 		map_particle_to_AMRgrid_recursive!(treeAMR, field, volume, X, hsml, boxsizes, treeNgb)
 	else
-		#4-layer unrolled (4^4 tasks)
-		if isLeaf(treeAMR)
-			map_particle_to_AMRgrid_recursive!(treeAMR, field, volume, X, hsml, boxsizes, treeNgb)
-			return
-		end
-		@sync for i in 1:2^N
-			if isLeaf(treeAMR.child[i])
-				map_particle_to_AMRgrid_recursive!(treeAMR.child[i], field, volume, X, hsml, boxsizes, treeNgb)
-			else
-				for j in 1:2^N
-					if isLeaf(treeAMR.child[i].child[j])
-						map_particle_to_AMRgrid_recursive!(treeAMR.child[i].child[j], field, volume, X, hsml, boxsizes, treeNgb)
-					else
-						for k in 1:2^N
-							if isLeaf(treeAMR.child[i].child[j].child[k])
-								map_particle_to_AMRgrid_recursive!(treeAMR.child[i].child[j].child[k], field, volume, X, hsml, boxsizes, treeNgb)
-							else
-								for l in 1:2^N
-									#@show i,j,k
-									Threads.@spawn map_particle_to_AMRgrid_recursive!(treeAMR.child[i].child[j].child[k].child[l], field, volume, X, hsml, boxsizes, treeNgb)
-								end
-							end
-						end
-					end
-				end
-			end
-		end
-
-		#parallel version (1-layer unrolled)
-		#@sync for i in 1:2^N
-		#	Threads.@spawn map_particle_to_AMRgrid_recursive!(treeAMR.child[i], field, volume, X, hsml, boxsizes, treeNgb)
-		#end
+		_spawn_AMR_parallel!(treeAMR, 0, DEFAULT_SPAWN_DEPTH, field, volume, X, hsml, boxsizes, treeNgb)
 	end
 end
 
@@ -289,61 +271,29 @@ function get_AMRfield_recursive!(fieldAMR::Vector{T}, node::Node{N,T,D}, max_dep
 end
 
 ########## project the 3D AMR field to a 2D image
-#function project_AMRgrid_to_image(nx, ny, dimx, dimy, tree::Node{N,T,D}, rootcenter::SVector{N,T}, boxsizes::SVector{N,T}) where {N,T,D}
-#	image = zeros(T, nx, ny)
-#	project_AMRgrid_to_image_recursive!(image, nx, ny, dimx, dimy, tree, rootcenter, boxsizes);
-#	return image
-#end
+
+function _collect_subtrees!(subtrees::Vector, node::Node{N,T,D}, depth::Int, spawn_depth::Int) where {N,T,D}
+	if isLeaf(node) || depth >= spawn_depth
+		push!(subtrees, node)
+	else
+		for i in 1:2^N
+			_collect_subtrees!(subtrees, node.child[i], depth+1, spawn_depth)
+		end
+	end
+end
 
 function project_AMRgrid_to_image(nx, ny, dimx, dimy, tree::Node{N,T,D}, rootcenter::SVector{N,T}, boxsizes::SVector{N,T}; serial::Bool=false) where {N,T,D}
 	image = zeros(T, nx, ny)
 	if serial
-		project_AMRgrid_to_image_recursive!(image, nx, ny, dimx, dimy, tree, rootcenter, boxsizes);
+		project_AMRgrid_to_image_recursive!(image, nx, ny, dimx, dimy, tree, rootcenter, boxsizes)
 		return image
 	end
-
-	ntasks = 0 #count total tasks/work units to allocate one buffer per task
-	if isLeaf(tree)
-		ntasks = 1
-	else
-		for i in 1:2^N
-			if isLeaf(tree.child[i])
-				ntasks += 1
-			else
-				for j in 1:2^N
-					if isLeaf(tree.child[i].child[j])
-						ntasks += 1
-					else
-						ntasks += 2^N
-					end
-				end
-			end
-		end
-	end
-	image_task = [zeros(T, nx, ny) for _ in 1:ntasks]; #each task has its own image
-	if isLeaf(tree)
-		project_AMRgrid_to_image_recursive!(image_task[1], nx, ny, dimx, dimy, tree, rootcenter, boxsizes)
-	else
-		tid = 0
-		@sync for i in 1:2^N
-			if isLeaf(tree.child[i])
-				tid += 1
-				project_AMRgrid_to_image_recursive!(image_task[tid], nx, ny, dimx, dimy, tree.child[i], rootcenter, boxsizes)
-			else
-				for j in 1:2^N
-					if isLeaf(tree.child[i].child[j])
-						tid += 1
-						project_AMRgrid_to_image_recursive!(image_task[tid], nx, ny, dimx, dimy, tree.child[i].child[j], rootcenter, boxsizes)
-					else
-						for k in 1:2^N
-							tid += 1
-							let buf = image_task[tid]
-								Threads.@spawn project_AMRgrid_to_image_recursive!(buf, nx, ny, dimx, dimy, tree.child[i].child[j].child[k], rootcenter, boxsizes)
-							end
-						end
-					end
-				end
-			end
+	subtrees = Node{N,T,D}[]
+	_collect_subtrees!(subtrees, tree, 0, DEFAULT_SPAWN_DEPTH - 1)
+	image_task = [zeros(T, nx, ny) for _ in 1:length(subtrees)]
+	@sync for i in eachindex(subtrees)
+		let buf = image_task[i], node = subtrees[i]
+			Threads.@spawn project_AMRgrid_to_image_recursive!(buf, nx, ny, dimx, dimy, node, rootcenter, boxsizes)
 		end
 	end
 	image .= sum(image_task)
