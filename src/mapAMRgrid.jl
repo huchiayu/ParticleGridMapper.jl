@@ -302,27 +302,51 @@ function project_AMRgrid_to_image(nx, ny, dimx, dimy, tree::Node{N,T,D}, rootcen
 		return image
 	end
 
-	image_thread = [zeros(T, nx, ny) for i in 1:Threads.maxthreadid()]; #each thread has its own image
+	ntasks = 0 #count total tasks/work units to allocate one buffer per task
 	if isLeaf(tree)
-		project_AMRgrid_to_image_recursive!(image_thread[threadid()], nx, ny, dimx, dimy, tree, rootcenter, boxsizes)
+		ntasks = 1
 	else
-		@sync for i in 1:2^N
+		for i in 1:2^N
 			if isLeaf(tree.child[i])
-				project_AMRgrid_to_image_recursive!(image_thread[threadid()], nx, ny, dimx, dimy, tree.child[i], rootcenter, boxsizes)
+				ntasks += 1
 			else
 				for j in 1:2^N
 					if isLeaf(tree.child[i].child[j])
-						project_AMRgrid_to_image_recursive!(image_thread[threadid()], nx, ny, dimx, dimy, tree.child[i].child[j], rootcenter, boxsizes)
+						ntasks += 1
+					else
+						ntasks += 2^N
+					end
+				end
+			end
+		end
+	end
+	image_task = [zeros(T, nx, ny) for _ in 1:ntasks]; #each task has its own image
+	if isLeaf(tree)
+		project_AMRgrid_to_image_recursive!(image_task[1], nx, ny, dimx, dimy, tree, rootcenter, boxsizes)
+	else
+		tid = 0
+		@sync for i in 1:2^N
+			if isLeaf(tree.child[i])
+				tid += 1
+				project_AMRgrid_to_image_recursive!(image_task[tid], nx, ny, dimx, dimy, tree.child[i], rootcenter, boxsizes)
+			else
+				for j in 1:2^N
+					if isLeaf(tree.child[i].child[j])
+						tid += 1
+						project_AMRgrid_to_image_recursive!(image_task[tid], nx, ny, dimx, dimy, tree.child[i].child[j], rootcenter, boxsizes)
 					else
 						for k in 1:2^N
-							Threads.@spawn project_AMRgrid_to_image_recursive!(image_thread[threadid()], nx, ny, dimx, dimy, tree.child[i].child[j].child[k], rootcenter, boxsizes)
+							tid += 1
+							let buf = image_task[tid]
+								Threads.@spawn project_AMRgrid_to_image_recursive!(buf, nx, ny, dimx, dimy, tree.child[i].child[j].child[k], rootcenter, boxsizes)
+							end
 						end
 					end
 				end
 			end
 		end
 	end
-	image .= sum(image_thread)
+	image .= sum(image_task)
 	return image
 end
 
