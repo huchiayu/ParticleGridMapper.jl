@@ -75,33 +75,42 @@ function map_particle_to_2Dgrid_loopP_thread(
     Xmin::NTuple{N,T}, Xmax::NTuple{N,T}; xaxis::Int=1,yaxis::Int=2, column::Bool=true,
     ngrids::NTuple{N,Int}=(100,100,100), pbc::NTuple{N,Bool}=(true,true,true)) where {N,T}
 
-    map = zeros(T, ngrids[xaxis], ngrids[yaxis], Threads.maxthreadid()); #each thread has its own slice
     ΔX = @. (Xmax - Xmin) / ngrids
 
     #in the special case of a slice (Nx/y/z = 1), the following hack can speed up a lot without touching the code
     xmin,xmax,Δx=trick(Xmin,Xmax,ΔX,ngrids)
 
-    @time @inbounds @threads for p in eachindex(X)
-        Istart = CartesianIndex(pos2idx_left( X[p] .- hsml[p], Δx, xmin))
-        Iend   = CartesianIndex(pos2idx_right(X[p] .+ hsml[p], Δx, xmin))
+    nchunks = Threads.nthreads()
+    chunk_size = cld(length(X), nchunks)
+    maps = [zeros(T, ngrids[xaxis], ngrids[yaxis]) for _ in 1:nchunks]
+    @sync for c in 1:nchunks
+        Threads.@spawn begin
+            local_map = maps[c]
+            pstart = (c-1)*chunk_size + 1
+            pend = min(c*chunk_size, length(X))
+            @inbounds for p in pstart:pend
+                Istart = CartesianIndex(pos2idx_left( X[p] .- hsml[p], Δx, xmin))
+                Iend   = CartesianIndex(pos2idx_right(X[p] .+ hsml[p], Δx, xmin))
 
-        hsml_inv = 1.0 / hsml[p]
-        f_v = field[p] * volume[p] * hsml_inv^3
+                hsml_inv = 1.0 / hsml[p]
+                f_v = field[p] * volume[p] * hsml_inv^3
 
-        for Idx in Istart:Iend
-            #only for the periodic dimensions
-            iw = periodic_idx.(Idx.I, ngrids, pbc)
+                for Idx in Istart:Iend
+                    #only for the periodic dimensions
+                    iw = periodic_idx.(Idx.I, ngrids, pbc)
 
-            #drop the out-of-bound idx (can only happen along the non-periodic dimensions after wrapping)
-            if any(iw .<= 0) || any(iw .> ngrids) continue end
+                    #drop the out-of-bound idx (can only happen along the non-periodic dimensions after wrapping)
+                    if any(iw .<= 0) || any(iw .> ngrids) continue end
 
-            #calculate distance using unwrapped idx
-            r = norm(idx2pos(Idx.I,Δx, xmin) - X[p]) * hsml_inv
+                    #calculate distance using unwrapped idx
+                    r = norm(idx2pos(Idx.I,Δx, xmin) - X[p]) * hsml_inv
 
-            map[iw[xaxis],iw[yaxis],threadid()] += kernel_cubic(r) * f_v
+                    local_map[iw[xaxis],iw[yaxis]] += kernel_cubic(r) * f_v
+                end
+            end
         end
     end
-    res = dropdims(sum(map, dims=3),dims=3) #sum over threads
+    res = sum(maps) #sum over tasks
     losdim = findfirst(((1,2,3).!=xaxis) .& ((1,2,3).!=yaxis)) #line-of-sight dimension
 
     #If this is a slice, we can't do column density, so use column=false instead.
@@ -118,8 +127,6 @@ function map_particle_to_3Dgrid_loopP_thread(
     ngrids::NTuple{N,Int}=(100,100,100),
     pbc::NTuple{N,Bool}=(true,true,true)) where {N,T}
 
-    map = zeros(T, ngrids[1], ngrids[2], ngrids[3], Threads.maxthreadid()); #each thread has its own slice
-    #map_sigma = zeros(T, ngrids[1], ngrids[2], ngrids[3], Threads.maxthreadid()); #for MFM
     Δx = @. (xmax - xmin) / ngrids
 
     if findfirst(ngrids.==1) != nothing
@@ -127,33 +134,38 @@ function map_particle_to_3Dgrid_loopP_thread(
         error("this is a slice! use map_particle_to_2Dgrid_loopP_thread() instead...")
     end
 
-    @inbounds @threads for p in eachindex(X)
-        Istart = CartesianIndex(pos2idx_left( X[p] .- hsml[p], Δx, xmin))
-        Iend   = CartesianIndex(pos2idx_right(X[p] .+ hsml[p], Δx, xmin))
+    nchunks = Threads.nthreads()
+    chunk_size = cld(length(X), nchunks)
+    maps = [zeros(T, ngrids[1], ngrids[2], ngrids[3]) for _ in 1:nchunks]
+    @sync for c in 1:nchunks
+        Threads.@spawn begin
+            local_map = maps[c]
+            pstart = (c-1)*chunk_size + 1
+            pend = min(c*chunk_size, length(X))
+            @inbounds for p in pstart:pend
+                Istart = CartesianIndex(pos2idx_left( X[p] .- hsml[p], Δx, xmin))
+                Iend   = CartesianIndex(pos2idx_right(X[p] .+ hsml[p], Δx, xmin))
 
-        hsml_inv = 1.0 / hsml[p]
-        f_v = field[p] * volume[p] * hsml_inv^3 #SPH
+                hsml_inv = 1.0 / hsml[p]
+                f_v = field[p] * volume[p] * hsml_inv^3 #SPH
 
-        for Idx in Istart:Iend
-            #only for the periodic dimensions
-            iw = periodic_idx.(Idx.I, ngrids, pbc)
+                for Idx in Istart:Iend
+                    #only for the periodic dimensions
+                    iw = periodic_idx.(Idx.I, ngrids, pbc)
 
-            #drop the out-of-bound idx (can only happen along the non-periodic dimensions after wrapping)
-            if any(iw .<= 0) || any(iw .> ngrids) continue end
+                    #drop the out-of-bound idx (can only happen along the non-periodic dimensions after wrapping)
+                    if any(iw .<= 0) || any(iw .> ngrids) continue end
 
-            #calculate distance using unwrapped idx
-            r = norm(idx2pos(Idx.I,Δx, xmin) - X[p]) * hsml_inv
+                    #calculate distance using unwrapped idx
+                    r = norm(idx2pos(Idx.I,Δx, xmin) - X[p]) * hsml_inv
 
-            idx = CartesianIndex(iw)
-            map[idx,threadid()] += kernel_cubic(r) * f_v #SPH
-            #map[idx,threadid()] += kernel_cubic(r) * field[p] * hsml_inv^3 #MFM
-            #map_sigma[idx,threadid()] += kernel_cubic(r) * hsml_inv^3 #MFM
+                    idx = CartesianIndex(iw)
+                    local_map[idx] += kernel_cubic(r) * f_v #SPH
+                end
+            end
         end
     end
-    m = dropdims(sum(map, dims=4),dims=4) #sum over threads
-    #m_sigma = dropdims(sum(map_sigma, dims=4),dims=4) #MFM
-    #m[m_sigma .> 0] ./= m_sigma[m_sigma .> 0] #MFM
-    return m
+    return sum(maps) #sum over tasks
 end
 
 function trick(xmin::NTuple{N,T}, xmax::NTuple{N,T}, Δx::NTuple{N,T}, ngrids::NTuple{N,Int}) where {N,T}
@@ -240,24 +252,30 @@ end
 function map_particle_to_3Dgrid_NGP_thread(field::Vector{T}, mass::Vector{T},
         X::Array{SVector{N,T},1}, ngrids::NTuple{N,Int}, xmin::NTuple{N,T}, xmax::NTuple{N,T}) where {N,T}
 
-    map = zeros(T, ngrids[1], ngrids[2], ngrids[3], Threads.maxthreadid()); #each thread has its own slice
-    counts = zeros(T, ngrids[1], ngrids[2], ngrids[3], Threads.maxthreadid()); #each thread has its own slice
     Δx = @. (xmax - xmin) / ngrids
 
-    @time @inbounds @threads for i in eachindex(X)
-        #idx = periodic_idx(pos2idx(X[i], Δx))
-        idx = (pos2idxNGP(X[i], Δx, xmin))
-        if any(idx .<= 0) || any(idx .> ngrids) continue end
-        #Idx = CartesianIndex(idx.data)
-        Idx = CartesianIndex(idx)
-        #map[Idx] += mass[i] / Δx^3
-        map[Idx,threadid()] += field[i]
-        counts[Idx,threadid()] += 1.0
+    nchunks = Threads.nthreads()
+    chunk_size = cld(length(X), nchunks)
+    maps = [zeros(T, ngrids[1], ngrids[2], ngrids[3]) for _ in 1:nchunks]
+    counts_arr = [zeros(T, ngrids[1], ngrids[2], ngrids[3]) for _ in 1:nchunks]
+    @sync for c in 1:nchunks
+        Threads.@spawn begin
+            local_map = maps[c]
+            local_counts = counts_arr[c]
+            pstart = (c-1)*chunk_size + 1
+            pend = min(c*chunk_size, length(X))
+            @inbounds for i in pstart:pend
+                idx = (pos2idxNGP(X[i], Δx, xmin))
+                if any(idx .<= 0) || any(idx .> ngrids) continue end
+                Idx = CartesianIndex(idx)
+                local_map[Idx] += field[i]
+                local_counts[Idx] += 1.0
+            end
+        end
     end
-    #map[counts.>0] ./= counts[counts.>0]
 
-    map_all = dropdims(sum(map, dims=4),dims=4) #sum over threads
-    counts_all = dropdims(sum(counts, dims=4),dims=4) #sum over threads
+    map_all = sum(maps) #sum over tasks
+    counts_all = sum(counts_arr)
     map_all[counts_all.>0] ./= counts_all[counts_all.>0]
     return map_all
 end
